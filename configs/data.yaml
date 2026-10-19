@@ -1,0 +1,11 @@
+# Data pipeline settings shared by all Milestone 1 scripts and the dataset classes.
+data_root: data          # relative to the project root; same layout on PC and Colab
+seed: 42
+val_fraction: 0.1        # fraction of each training set held out for internal validation
+
+rgb_dir: processed/rgb_256p  # shrunk videos from scripts/shrink_rgb.py; null = decode raw 1080p (slow)
+
+num_frames: 16          # synchronized frames per clip (RGB and skeleton)
+rgb_size: 112            # final square crop
+rgb_resize_hw: [128, 171]  # resize before cropping (standard R3D-18 preprocessing)
+max_bodies: 2            # M in C x T x V x M

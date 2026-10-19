@@ -1,0 +1,9 @@
+# data is rebuilt from the raw NTU zips (see README); only the official missing-skeleton list is tracked
+data/*
+!data/metadata/
+data/metadata/*
+!data/metadata/NTU_RGBD120_samples_with_missing_skeletons.txt
+outputs/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
