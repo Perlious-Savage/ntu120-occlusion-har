@@ -1,0 +1,20 @@
+# CTR-GCN joint stream, official NTU120 recipe (github.com/Uason-Chen/CTR-GCN config/nturgbd120-*/default.yaml)
+name: ctrgcn_xset
+seed: 42
+dataset: ntu120
+protocol: xset
+data_root: data
+splits: {train: data/splits/xset_train_internal.csv, val: data/splits/xset_val.csv, test: data/splits/xset_test.csv}
+num_classes: 120
+
+model: {name: ctrgcn}
+input: {window: 64, max_bodies: 2}       # B x 3 x 64 x 25 x 2; train crop 50-100% + rotation, eval central 95%
+
+epochs: 65
+batch_size: 64
+optimizer: {name: sgd, lr: 0.1, momentum: 0.9, nesterov: true, weight_decay: 0.0004}
+scheduler: {name: step, milestones: [35, 55], gamma: 0.1, warmup_epochs: 5}
+amp: true
+num_workers: 8
+
+output_dir: outputs

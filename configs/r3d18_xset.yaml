@@ -1,0 +1,20 @@
+# R3D-18 (torchvision, Kinetics-400 pretrained), new 120-way classifier
+name: r3d18_xset
+seed: 42
+dataset: ntu120
+protocol: xset
+data_root: data
+splits: {train: data/splits/xset_train_internal.csv, val: data/splits/xset_val.csv, test: data/splits/xset_test.csv}
+num_classes: 120
+
+model: {name: r3d18, pretrained: true}
+input: {num_frames: 16, size: 112, resize_hw: [128, 171]}   # B x 3 x 16 x 112 x 112; train: segment jitter + random crop
+
+epochs: 30
+batch_size: 32
+optimizer: {name: sgd, lr: 0.01, momentum: 0.9, nesterov: true, weight_decay: 0.0001}
+scheduler: {name: cosine, warmup_epochs: 2}
+amp: true
+num_workers: 12
+
+output_dir: outputs

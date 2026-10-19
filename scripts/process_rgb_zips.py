@@ -13,7 +13,9 @@ Usage: python scripts/process_rgb_zips.py --zips <dir with nturgbd_rgb_s0XX.zip>
            [--shard 0/1] [--restore]
 """
 import argparse
+import os
 import shutil
+import socket
 import sys
 import tarfile
 import time
@@ -38,6 +40,23 @@ def restore(store):
         with tarfile.open(t) as tf:
             tf.extractall(OUT, filter='data')
     print(f'restored {len(tars)} setups, {len(list(OUT.glob("*.mp4")))} videos into {OUT}')
+
+
+def claim(zip_on_store, store, stale_minutes=45):
+    """Shared work queue across machines: a zip is taken by writing <tar name>.claim (holder + time) on the store.
+    Skips zips that are finished or freshly claimed by another machine; reclaims our own or stale claims."""
+    tag = tag_of(zip_on_store)
+    if (store / f'rgb_256p_{tag}.tar').exists():
+        return False
+    c = store / f'rgb_256p_{tag}.claim'
+    me = os.environ.get('WORKER_ID') or socket.gethostname()
+    if c.exists():
+        holder = c.read_text().split()[0] if c.read_text().strip() else ''
+        if holder != me and time.time() - c.stat().st_mtime < stale_minutes * 60:
+            return False
+    c.write_text(f'{me} {time.ctime()}\n')
+    time.sleep(5)  # Drive is eventually consistent: if two machines raced, the later write wins
+    return c.read_text().split()[0] == me
 
 
 def prepare(zip_on_store):
@@ -66,6 +85,7 @@ def finish(work, tag, store, workers, t0):
         tf.add(OUT / f'frame_counts_{tag}.csv', arcname=f'frame_counts_{tag}.csv')
     shutil.copy(tar_tmp, store / (final.name + '.part'))
     (store / (final.name + '.part')).rename(final)  # only complete archives get the final name
+    (store / f'rgb_256p_{tag}.claim').unlink(missing_ok=True)
     shutil.rmtree(work)
     print(f'DONE {tag}: {len(df)} videos, {final.stat().st_size / 2**20:.0f} MB, '
           f'{(time.time() - t0) / 60:.1f} min since start', flush=True)
@@ -95,17 +115,21 @@ def main():
           f'{[tag_of(z) for z in todo]}', flush=True)
     if args.reverse:
         todo = todo[::-1]
-    done_on_store = lambda z: (args.store / f'rgb_256p_{tag_of(z)}.tar').exists()  # noqa: E731
     t0 = time.time()
-    with ThreadPoolExecutor(1) as io:  # prefetch: extract zip i+1 while zip i is being shrunk
-        nxt = io.submit(prepare, todo[0]) if todo else None
-        for i, z in enumerate(todo):
-            work = nxt.result()
-            nxt = io.submit(prepare, todo[i + 1]) if i + 1 < len(todo) else None
-            if done_on_store(z):  # another machine finished it meanwhile (helpers working from the other end)
-                shutil.rmtree(work)
-                print(f'skip {tag_of(z)} (finished elsewhere)', flush=True)
-                continue
+
+    def next_job():
+        """Claim the next zip nobody else is working on, prepare it; None when nothing is left."""
+        while todo:
+            z = todo.pop(0)
+            if claim(z, args.store):
+                return z, prepare(z)
+        return None
+
+    with ThreadPoolExecutor(1) as io:  # prefetch: claim + extract the next zip while the current one is shrunk
+        nxt = io.submit(next_job)
+        while (job := nxt.result()) is not None:
+            nxt = io.submit(next_job)
+            z, work = job
             finish(work, tag_of(z), args.store, args.workers, t0)
     done = len(list(args.store.glob('rgb_256p_s*.tar')))
     print(f'shard {k}/{n} finished. {done}/32 setups on store in total')
