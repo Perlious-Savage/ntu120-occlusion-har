@@ -4,6 +4,7 @@ For each sample the dataset class picks synchronized RGB / skeleton frame indice
 positions are shown: top row = RGB frame with the skeleton's 2D colour-camera projection drawn on
 it, bottom row = the 3D skeleton (x, y). If the overlay sits on the person, the modalities agree.
 
+Uses the same RGB files as training (config rgb_dir), so it checks exactly what the models see.
 Usage: python scripts/visualize_sync.py --split data/splits/xsub_train.csv [--n 20] [--out outputs/sync_check]
 """
 import argparse
@@ -22,7 +23,7 @@ from src.datasets.rgb_loader import read_video_frames  # noqa: E402
 from src.datasets.skeleton_loader import load_skeleton  # noqa: E402
 from src.utils.ntu import NTU_BONES  # noqa: E402
 
-DISPLAY_HW = (540, 960)  # half of the 1080p colour camera; skeleton colour coords are scaled to match
+DISPLAY_HW = (256, 456)  # native size of the shrunk videos (raw 1080p videos are downscaled to it)
 SHOW = [0, 5, 10, 15]    # which of the 16 synchronized positions to display
 BODY_COLORS = ['lime', 'magenta']
 
@@ -62,10 +63,10 @@ def main():
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
-    # raw 1080p videos: the overlay uses the skeleton's colour-camera pixel coordinates
     ds = NTU120Multimodal(args.split, cfg['data_root'], cfg['num_frames'], cfg['rgb_size'],
-                          cfg['rgb_resize_hw'], cfg['max_bodies'], rgb_dir=None)
-    scale = DISPLAY_HW[1] / 1920
+                          cfg['rgb_resize_hw'], cfg['max_bodies'])
+    # skeleton colour coords are pixels of the 1920x1080 colour camera
+    scale = np.array([DISPLAY_HW[1] / 1920, DISPLAY_HW[0] / 1080])[:, None]
     for k, i in enumerate(pick_diverse(ds.df, args.n, cfg['seed']), 1):
         item = ds[i]  # the exact indices the training pipeline uses
         row = ds.df.iloc[i]

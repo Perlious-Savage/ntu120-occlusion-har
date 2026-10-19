@@ -14,11 +14,9 @@ class NTU120Multimodal(torch.utils.data.Dataset):
     used in each modality (same normalised positions, see uniform_temporal_indices)."""
 
     def __init__(self, split_csv, data_root='data', num_frames=16, rgb_size=112,
-                 rgb_resize_hw=(128, 171), max_bodies=2, rgb_dir=None):
+                 rgb_resize_hw=(128, 171), max_bodies=2):
         self.df = pd.read_csv(split_csv)
         self.root = Path(data_root)
-        if rgb_dir:  # shrunk copies (same sample ID, same frame count) instead of raw 1080p
-            self.df['rgb_path'] = [f'{rgb_dir}/{s}_rgb.mp4' for s in self.df.sample_id]
         self.num_frames, self.rgb_size = num_frames, rgb_size
         self.rgb_resize_hw, self.max_bodies = tuple(rgb_resize_hw), max_bodies
 

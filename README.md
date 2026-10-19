@@ -11,7 +11,7 @@ data/
   raw/skeleton/  S###C###P###R###A###.skeleton  (extracted, original names)
   metadata/      metadata.csv, integrity report, statistics, official NTU missing-skeleton list
   splits/        X-Sub / X-Set train/test + internal train/val CSVs
-  processed/     skeleton_xyz_f16.bin + skeleton_index.csv (packed skeleton cache)
+  processed/     rgb_256p/ (shrunk videos + frame counts), skeleton_xyz_f16.bin + skeleton_index.csv
 src/datasets/    skeleton_loader.py, rgb_loader.py, temporal.py, ntu120_multimodal.py
 src/utils/       ntu.py (sample-ID parser, protocols, skeleton bones)
 scripts/         command-line pipeline steps (below)
@@ -42,11 +42,11 @@ with missing/incomplete skeletons (from github.com/shahroudy/NTURGB-D).
 
 ```
 python tests/test_core.py                 # parser, protocol and temporal-sampling checks
+python scripts/shrink_rgb.py              # raw/rgb -> processed/rgb_256p/*_rgb.mp4 + frame_counts_all.csv
+                                          #   (or, zip by zip with little disk: scripts/process_rgb_zips.py)
 python scripts/build_metadata.py          # -> data/metadata/metadata.csv (parser round-trip on every file)
 python scripts/check_skeletons.py         # -> skeleton_integrity_report.csv + packed skeleton cache
 python scripts/make_splits.py             # -> data/splits/*.csv
-python scripts/rgb_frame_counts.py        # -> data/metadata/rgb_frame_counts.csv (exact decoded counts)
-python scripts/shrink_rgb.py              # -> data/processed/rgb_256p/*_rgb.mp4 (every frame kept, counts verified)
 python scripts/dataset_statistics.py      # -> dataset_statistics.txt / _per_class.csv
 python scripts/visualize_sync.py --split data/splits/xsub_train.csv   # -> outputs/sync_check/*.png
 ```
@@ -69,8 +69,9 @@ All settings (data root, seed, frames, crop size, max bodies, validation fractio
 - **Skeleton cache**: float16 (~2 mm precision) packed into one file for fast loading.
 - **RGB storage**: raw 1080p MPEG-4 takes ~2 s per video to decode, so videos are re-encoded once
   to 256 x 456 H.264 (`shrink_rgb.py`, same sample ID, every frame kept, frame count verified;
-  ~33 KB per video). Mean absolute pixel difference of the final clip vs raw: 0.004. Set
-  `rgb_dir: null` in the config to read raw videos instead.
+  ~33 KB per video). Mean absolute pixel difference of the final clip vs raw: 0.004. Metadata,
+  training and the sync visualization all use these files (config `rgb_dir`); the exact raw
+  frame counts recorded during shrinking are used for the statistics.
 - **RGB**: every frame decoded (exact count), resized to 128 x 171, center-cropped to 112 x 112,
   values in [0, 1] (normalization belongs to the model).
 - **Synchronization**: `uniform_temporal_indices(n, 16)` maps the same 16 normalised positions

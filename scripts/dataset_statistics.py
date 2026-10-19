@@ -1,6 +1,6 @@
 """Dataset statistics (Milestone 1, step 13).
 
-Needs: metadata.csv, skeleton_integrity_report.csv, rgb_frame_counts.csv, splits/*.csv
+Needs: metadata.csv, skeleton_integrity_report.csv, <rgb_dir>/frame_counts_*.csv, splits/*.csv
 Writes: data/metadata/dataset_statistics.txt and dataset_statistics_per_class.csv
 Usage: python scripts/dataset_statistics.py [--config configs/data.yaml]
 """
@@ -22,12 +22,14 @@ def describe(s):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--config', default='configs/data.yaml')
-    root = Path(yaml.safe_load(open(ap.parse_args().config))['data_root'])
+    cfg = yaml.safe_load(open(ap.parse_args().config))
+    root = Path(cfg['data_root'])
     meta_dir, split_dir = root / 'metadata', root / 'splits'
 
     meta = read_metadata(root)
     report = pd.read_csv(meta_dir / 'skeleton_integrity_report.csv')
-    rgb_len = pd.read_csv(meta_dir / 'rgb_frame_counts.csv')
+    # exact decoded raw-video frame counts, written by shrink_rgb.py
+    rgb_len = pd.concat(pd.read_csv(p) for p in sorted((root / cfg['rgb_dir']).glob('frame_counts_*.csv')))
     splits = {p.stem: pd.read_csv(p) for p in sorted(split_dir.glob('*.csv'))}
     matched = meta[meta.rgb_exists & meta.skeleton_exists]
     usable = pd.concat([splits['xsub_train'], splits['xsub_test']])
