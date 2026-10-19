@@ -5,7 +5,8 @@ counts into one .tar on the store (e.g. Google Drive), delete the extracted vide
 copied and extracted in the background while the current one is being shrunk, so the CPUs never wait
 on I/O. Zips whose .tar already exists on the store are skipped, so the run resumes after a disconnect.
 
---shard k/n processes every n-th zip starting at k, so n machines can split the work.
+--shard k/n processes every n-th zip starting at k, so n machines can split the work; a faster
+machine can take several shares, e.g. --shard 0,1/5.
 --restore unpacks all .tar files from the store into data/processed/rgb_256p (start of a session).
 
 Usage: python scripts/process_rgb_zips.py --zips <dir with nturgbd_rgb_s0XX.zip> --store <dir>
@@ -75,7 +76,8 @@ def main():
     ap.add_argument('--zips', required=True, type=Path)
     ap.add_argument('--store', required=True, type=Path)
     ap.add_argument('--workers', type=int, default=None)
-    ap.add_argument('--shard', default='0/1', help='k/n: this machine handles zips k, k+n, k+2n, ...')
+    ap.add_argument('--shard', default='0/1',
+                    help='k/n: this machine handles zips k, k+n, k+2n, ... (several shares: 0,1/5)')
     ap.add_argument('--restore', action='store_true')
     args = ap.parse_args()
     args.store.mkdir(parents=True, exist_ok=True)
@@ -83,8 +85,10 @@ def main():
         restore(args.store)
         return
 
-    k, n = map(int, args.shard.split('/'))
-    zips = sorted(args.zips.glob('nturgbd_rgb_s*.zip'))[k::n]
+    ks, n = args.shard.split('/')
+    ks, n = {int(k) for k in ks.split(',')}, int(n)
+    zips = [z for i, z in enumerate(sorted(args.zips.glob('nturgbd_rgb_s*.zip'))) if i % n in ks]
+    k = args.shard.split('/')[0]
     todo = [z for z in zips if not (args.store / f'rgb_256p_{tag_of(z)}.tar').exists()]
     print(f'shard {k}/{n}: {len(zips)} zips, {len(zips) - len(todo)} already done, {len(todo)} to process: '
           f'{[tag_of(z) for z in todo]}', flush=True)
