@@ -54,6 +54,43 @@ python scripts/visualize_sync.py --split data/splits/xsub_train.csv   # -> outpu
 All settings (data root, seed, frames, crop size, max bodies, validation fraction) live in
 `configs/data.yaml`; every script accepts `--config`.
 
+### On Google Colab (not enough disk for 269 GB of raw videos)
+
+With the raw zips on Google Drive (`/content/drive/MyDrive/ntu120/raw`), each Colab session runs:
+
+```
+python scripts/process_rgb_zips.py --zips /content/drive/MyDrive/ntu120/raw --store /content/drive/MyDrive/ntu120_work
+```
+
+Every session takes zips from a shared queue (a `.claim` file on the store per zip), copies and
+extracts 3 at a time, shrinks them, and saves one `rgb_256p_sXXX.tar` per setup to the store, so
+any number of sessions split the work and a disconnected session simply resumes. Afterwards, on
+one session: `--restore` (unpacks all tars), unzip the two skeleton zips into `data/raw/skeleton`
+(`unzip -j`), then run the remaining steps above. The full run used 3 CPU sessions for about 1.5 h.
+
+## Milestone 1 results (full dataset)
+
+| | |
+|---|---|
+| Sample IDs | 114,480 (all with RGB and skeleton; 0 missing files) |
+| Usable after integrity filtering | 113,945 (the 535 samples on NTU's missing-skeleton list removed) |
+| Fatal skeleton problems found | 356 (no tracked body), all on NTU's official list |
+| X-Sub | train 63,026 / test 50,919; internal train 51,557 / val 11,469 (subjects 8, 47, 70, 82, 103) |
+| X-Set | train 54,468 / test 59,477; internal train 49,021 / val 5,447 |
+| RGB vs skeleton frame count | identical for all 114,480 samples (min 15, max 300, mean 71.6) |
+
+## Milestone 2 (code ready; full runs after Milestone 1 review)
+
+```
+python scripts/train.py --config configs/ctrgcn_xsub.yaml --overfit 64 --epochs 60   # tiny-subset check
+python scripts/train.py --config configs/r3d18_xsub.yaml        # resumes from outputs/<run>/last.pt
+python scripts/evaluate.py --run outputs/r3d18_xsub_seed42
+python scripts/compare_baselines.py                              # results table + class comparison
+```
+
+Both baselines reach 100% training accuracy on the 64-sample overfit test. On a 6 GB GPU use
+`--batch-size 8 --workers 4` for local checks.
+
 ## Decisions (documented per the milestone rules)
 
 - **Labels**: `action_id` 1-120, `label = action_id - 1` (0-119).
