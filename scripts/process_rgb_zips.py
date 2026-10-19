@@ -78,6 +78,7 @@ def main():
     ap.add_argument('--workers', type=int, default=None)
     ap.add_argument('--shard', default='0/1',
                     help='k/n: this machine handles zips k, k+n, k+2n, ... (several shares: 0,1/5)')
+    ap.add_argument('--reverse', action='store_true', help='process this shard from the end (to help a slower machine)')
     ap.add_argument('--restore', action='store_true')
     args = ap.parse_args()
     args.store.mkdir(parents=True, exist_ok=True)
@@ -92,12 +93,19 @@ def main():
     todo = [z for z in zips if not (args.store / f'rgb_256p_{tag_of(z)}.tar').exists()]
     print(f'shard {k}/{n}: {len(zips)} zips, {len(zips) - len(todo)} already done, {len(todo)} to process: '
           f'{[tag_of(z) for z in todo]}', flush=True)
+    if args.reverse:
+        todo = todo[::-1]
+    done_on_store = lambda z: (args.store / f'rgb_256p_{tag_of(z)}.tar').exists()  # noqa: E731
     t0 = time.time()
     with ThreadPoolExecutor(1) as io:  # prefetch: extract zip i+1 while zip i is being shrunk
         nxt = io.submit(prepare, todo[0]) if todo else None
         for i, z in enumerate(todo):
             work = nxt.result()
             nxt = io.submit(prepare, todo[i + 1]) if i + 1 < len(todo) else None
+            if done_on_store(z):  # another machine finished it meanwhile (helpers working from the other end)
+                shutil.rmtree(work)
+                print(f'skip {tag_of(z)} (finished elsewhere)', flush=True)
+                continue
             finish(work, tag_of(z), args.store, args.workers, t0)
     done = len(list(args.store.glob('rgb_256p_s*.tar')))
     print(f'shard {k}/{n} finished. {done}/32 setups on store in total')
