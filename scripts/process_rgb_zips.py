@@ -18,8 +18,10 @@ import shutil
 import socket
 import sys
 import tarfile
+import threading
 import time
 import zipfile
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -99,6 +101,7 @@ def main():
     ap.add_argument('--shard', default='0/1',
                     help='k/n: this machine handles zips k, k+n, k+2n, ... (several shares: 0,1/5)')
     ap.add_argument('--reverse', action='store_true', help='process this shard from the end (to help a slower machine)')
+    ap.add_argument('--io-threads', type=int, default=3, help='zips copied/extracted in parallel')
     ap.add_argument('--restore', action='store_true')
     args = ap.parse_args()
     args.store.mkdir(parents=True, exist_ok=True)
@@ -117,18 +120,27 @@ def main():
         todo = todo[::-1]
     t0 = time.time()
 
+    lock = threading.Lock()
+
     def next_job():
         """Claim the next zip nobody else is working on, prepare it; None when nothing is left."""
-        while todo:
-            z = todo.pop(0)
+        while True:
+            with lock:
+                if not todo:
+                    return None
+                z = todo.pop(0)
             if claim(z, args.store):
                 return z, prepare(z)
-        return None
 
-    with ThreadPoolExecutor(1) as io:  # prefetch: claim + extract the next zip while the current one is shrunk
-        nxt = io.submit(next_job)
-        while (job := nxt.result()) is not None:
-            nxt = io.submit(next_job)
+    # Drive throughput is per file stream, so several zips are copied/extracted at once while the
+    # current one is being shrunk (shrinking is a few minutes; copying an 8 GB zip is the slow part).
+    with ThreadPoolExecutor(args.io_threads) as io:
+        pending = deque(io.submit(next_job) for _ in range(args.io_threads))
+        while pending:
+            job = pending.popleft().result()
+            if job is None:
+                continue
+            pending.append(io.submit(next_job))
             z, work = job
             finish(work, tag_of(z), args.store, args.workers, t0)
     done = len(list(args.store.glob('rgb_256p_s*.tar')))
