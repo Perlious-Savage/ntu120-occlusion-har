@@ -34,6 +34,7 @@ def main():
                              f'{r["macro_f1"]:.4f} | {r["best_epoch"]} |')
             else:
                 lines.append(f'| {mname} | {pname} | not run | | | |')
+    lines += ['', 'Best Epoch counts from 0, as in training_log.csv (65 CTR-GCN epochs = 0-64, 30 R3D-18 epochs = 0-29).']
 
     for p, pname in PROTOCOLS.items():
         runs = {m: OUT / f'{m}_{p}_seed{args.seed}' / 'per_class_accuracy.csv' for m in MODELS}
