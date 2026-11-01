@@ -56,6 +56,7 @@ def main():
     if args.workers is not None:
         cfg['num_workers'] = args.workers
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    torch.backends.cudnn.benchmark = True  # fastest conv algorithms for the fixed input shape (see train.py)
     ds = build_dataset(cfg, cfg['splits']['test'], train=False)
     dl = torch.utils.data.DataLoader(ds, batch_size=cfg['batch_size'], shuffle=False,
                                      num_workers=cfg['num_workers'], pin_memory=True)

@@ -51,6 +51,9 @@ def main():
         cfg['num_workers'] = args.workers
     seed = cfg['seed']
     seed_everything(seed)
+    # pick the fastest conv algorithm for our fixed input shapes; the default choice was 17x slower for
+    # R3D-18 under GPU memory pressure. Seeds stay fixed; results are not bit-identical run to run either way.
+    torch.backends.cudnn.benchmark = True
 
     run = f'{cfg["name"]}_seed{seed}' + (f'_overfit{args.overfit}' if args.overfit else '')
     out = Path(cfg['output_dir']) / run
