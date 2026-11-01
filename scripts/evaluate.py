@@ -64,6 +64,12 @@ def main():
 
     results = {'run': run.name, 'test_split': cfg['splits']['test'], 'num_test_samples': len(ds)}
     for name in ['best_val_accuracy', 'best_val_f1']:
+        ck_epoch = torch.load(run / f'{name}.pt', map_location='cpu', weights_only=False)['epoch']
+        if name == 'best_val_f1' and ck_epoch == results['best_val_accuracy']['best_epoch']:
+            # same epoch -> same weights: reuse the metrics instead of another full pass over the test set
+            results[name] = dict(results['best_val_accuracy'])
+            print(f'{name:18} (epoch {ck_epoch}): same checkpoint as best_val_accuracy, metrics reused', flush=True)
+            continue
         epoch, probs, labels, ids, loss = evaluate_checkpoint(run / f'{name}.pt', cfg, dl, device)
         results[name] = {'best_epoch': epoch, 'test_loss': loss, **classification_metrics(probs, labels, n)}
         print(f'{name:18} (epoch {epoch}): ' + ', '.join(f'{k} {v:.4f}' for k, v in results[name].items()
