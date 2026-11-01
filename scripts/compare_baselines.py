@@ -12,6 +12,7 @@ from pathlib import Path
 import pandas as pd
 
 OUT = Path('outputs')
+NAMES = Path('data/metadata/ntu120_action_names.csv')  # official names (github.com/shahroudy/NTURGB-D)
 MODELS = {'r3d18': 'R3D-18', 'ctrgcn': 'CTR-GCN'}
 PROTOCOLS = {'xsub': 'X-Sub', 'xset': 'X-Set'}
 
@@ -40,15 +41,18 @@ def main():
             continue
         rgb, sk = (pd.read_csv(runs[m]).set_index('action_id') for m in MODELS)
         cmp = pd.DataFrame({'support': rgb.support, 'rgb_accuracy': rgb.accuracy, 'skeleton_accuracy': sk.accuracy})
+        if NAMES.exists():
+            cmp.insert(0, 'action', pd.read_csv(NAMES).set_index('action_id').name)
         cmp['rgb_minus_skeleton'] = cmp.rgb_accuracy - cmp.skeleton_accuracy
         cmp.to_csv(OUT / f'class_comparison_{p}.csv')
 
         def table(df, cols, title):
-            lines.extend(['', f'### {pname}: {title}', '', '| Action ID | ' + ' | '.join(cols) + ' |',
+            lines.extend(['', f'### {pname}: {title}', '', '| Action | ' + ' | '.join(cols) + ' |',
                           '|---' * (len(cols) + 1) + '|'])
             for aid, r in df.iterrows():
-                lines.append(f'| A{aid:03d} | ' + ' | '.join(f'{r[c]:.1%}' if isinstance(r[c], float) else str(r[c])
-                                                           for c in cols) + ' |')
+                name = f'A{aid:03d} {r["action"]}' if 'action' in df else f'A{aid:03d}'
+                lines.append(f'| {name} | ' + ' | '.join(f'{r[c]:.1%}' if isinstance(r[c], float) else str(r[c])
+                                                      for c in cols) + ' |')
 
         cols = ['rgb_accuracy', 'skeleton_accuracy', 'rgb_minus_skeleton']
         table(cmp.nsmallest(20, 'rgb_accuracy'), cols, '20 weakest classes for RGB (R3D-18)')

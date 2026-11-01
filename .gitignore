@@ -3,6 +3,7 @@ data/*
 !data/metadata/
 data/metadata/*
 !data/metadata/NTU_RGBD120_samples_with_missing_skeletons.txt
+!data/metadata/ntu120_action_names.csv
 outputs/
 __pycache__/
 *.pyc
