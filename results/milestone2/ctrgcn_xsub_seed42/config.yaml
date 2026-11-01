@@ -1,0 +1,33 @@
+name: ctrgcn_xsub
+seed: 42
+dataset: ntu120
+protocol: xsub
+data_root: data
+splits:
+  train: data/splits/xsub_train_internal.csv
+  val: data/splits/xsub_val.csv
+  test: data/splits/xsub_test.csv
+num_classes: 120
+model:
+  name: ctrgcn
+input:
+  window: 64
+  max_bodies: 2
+epochs: 65
+batch_size: 64
+optimizer:
+  name: sgd
+  lr: 0.1
+  momentum: 0.9
+  nesterov: true
+  weight_decay: 0.0004
+scheduler:
+  name: step
+  milestones:
+  - 35
+  - 55
+  gamma: 0.1
+  warmup_epochs: 5
+amp: true
+num_workers: 4
+output_dir: outputs

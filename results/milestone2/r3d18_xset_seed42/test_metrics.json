@@ -1,0 +1,19 @@
+{
+  "run": "r3d18_xset_seed42",
+  "test_split": "data/splits/xset_test.csv",
+  "num_test_samples": 59477,
+  "best_val_accuracy": {
+    "best_epoch": 26,
+    "test_loss": 0.5156107227952739,
+    "top1_accuracy": 0.8751786404828757,
+    "top5_accuracy": 0.983892933402828,
+    "macro_f1": 0.8735469648543434
+  },
+  "best_val_f1": {
+    "best_epoch": 26,
+    "test_loss": 0.5156107227952739,
+    "top1_accuracy": 0.8751786404828757,
+    "top5_accuracy": 0.983892933402828,
+    "macro_f1": 0.8735469648543434
+  }
+}

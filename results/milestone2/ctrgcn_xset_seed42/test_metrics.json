@@ -1,0 +1,19 @@
+{
+  "run": "ctrgcn_xset_seed42",
+  "test_split": "data/splits/xset_test.csv",
+  "num_test_samples": 59477,
+  "best_val_accuracy": {
+    "best_epoch": 64,
+    "test_loss": 0.5163700654334835,
+    "top1_accuracy": 0.8622997124939052,
+    "top5_accuracy": 0.9708963128604334,
+    "macro_f1": 0.8619767426661593
+  },
+  "best_val_f1": {
+    "best_epoch": 64,
+    "test_loss": 0.5163700654334835,
+    "top1_accuracy": 0.8622997124939052,
+    "top5_accuracy": 0.9708963128604334,
+    "macro_f1": 0.8619767426661593
+  }
+}

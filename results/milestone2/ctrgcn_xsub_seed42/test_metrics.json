@@ -1,0 +1,19 @@
+{
+  "run": "ctrgcn_xsub_seed42",
+  "test_split": "data/splits/xsub_test.csv",
+  "num_test_samples": 50919,
+  "best_val_accuracy": {
+    "best_epoch": 58,
+    "test_loss": 0.6081827882299878,
+    "top1_accuracy": 0.8353659734087472,
+    "top5_accuracy": 0.967909817553369,
+    "macro_f1": 0.8380202391256572
+  },
+  "best_val_f1": {
+    "best_epoch": 58,
+    "test_loss": 0.6081827882299878,
+    "top1_accuracy": 0.8353659734087472,
+    "top5_accuracy": 0.967909817553369,
+    "macro_f1": 0.8380202391256572
+  }
+}

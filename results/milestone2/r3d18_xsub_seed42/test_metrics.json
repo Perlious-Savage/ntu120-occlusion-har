@@ -1,0 +1,19 @@
+{
+  "run": "r3d18_xsub_seed42",
+  "test_split": "data/splits/xsub_test.csv",
+  "num_test_samples": 50919,
+  "best_val_accuracy": {
+    "best_epoch": 26,
+    "test_loss": 0.6261226031352013,
+    "top1_accuracy": 0.857538443410122,
+    "top5_accuracy": 0.9801842141440327,
+    "macro_f1": 0.8668572488714322
+  },
+  "best_val_f1": {
+    "best_epoch": 26,
+    "test_loss": 0.6261226031352013,
+    "top1_accuracy": 0.857538443410122,
+    "top5_accuracy": 0.9801842141440327,
+    "macro_f1": 0.8668572488714322
+  }
+}

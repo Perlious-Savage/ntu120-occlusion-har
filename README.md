@@ -81,7 +81,27 @@ one session: `--restore` (unpacks all tars), unzip the two skeleton zips into `d
 | Noise bodies (official denoising) | removed in 3,296 samples; a simple top-2-by-motion rule would have kept one as a "person" in 2,873 (2.5%) |
 | Two-person actions with only one person ever tracked | 684 of 24,732 (Kinect limitation; the single actor is used) |
 
-## Milestone 2 (code ready; full runs after Milestone 1 review)
+## Milestone 2 results (clean data, seed 42, test split, best-validation-accuracy checkpoint)
+
+| Model | Protocol | Top-1 Acc. | Top-5 Acc. | Macro-F1 | Best Epoch (0-based) |
+|---|---|---|---|---|---|
+| R3D-18 | X-Sub | 85.75% | 98.02% | 0.8669 | 26 |
+| R3D-18 | X-Set | 87.52% | 98.39% | 0.8735 | 26 |
+| CTR-GCN (joint) | X-Sub | 83.54% | 96.79% | 0.8380 | 58 |
+| CTR-GCN (joint) | X-Set | 86.23% | 97.09% | 0.8620 | 64 |
+
+Measured per-class differences (`results/milestone2/baseline_results.md`, `class_comparison_*.csv`):
+RGB is clearly better (>= 10 points) on object- and appearance-defined actions (typing on a keyboard,
+cutting nails, reading, writing, take off a shoe, throw up cap/hat, drop); skeleton is clearly better
+on motion-defined ones (stretch oneself; fold paper, snapping fingers, clapping on X-Set). Both are
+weakest on fine hand gestures (make OK sign, victory sign, thumb up, staple book, counting money).
+
+Per run, `results/milestone2/<run>/` keeps the config, training log, test metrics, per-class accuracy,
+learning curves and confusion matrix. Checkpoints, `predictions.csv` and `probabilities.npy` are on
+Google Drive (`ntu120_work/outputs/<run>/`). Runs were moved between Colab GPUs mid-training by
+resuming from `last.pt`; the logs show one continuous run per experiment.
+
+## Milestone 2 commands
 
 ```
 python scripts/train.py --config configs/ctrgcn_xsub.yaml --overfit 64 --epochs 60   # tiny-subset check
