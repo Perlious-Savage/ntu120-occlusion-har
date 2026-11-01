@@ -7,7 +7,7 @@ import torch
 
 from src.models.ctrgcn.feeder_tools import random_rot, valid_crop_resize
 
-from .rgb_loader import read_video_frames, to_clip_tensor
+from .rgb_loader import read_selected_frames, to_clip_tensor
 from .temporal import uniform_temporal_indices
 
 
@@ -24,18 +24,19 @@ class RGBClips(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.df)
 
+    def pick(self, n):
+        if not self.train:
+            return uniform_temporal_indices(n, self.num_frames)
+        edges = np.linspace(0, n, self.num_frames + 1)
+        return np.minimum(np.floor(edges[:-1] + np.random.rand(self.num_frames) * np.diff(edges)), n - 1).astype(int)
+
     def __getitem__(self, i):
         row = self.df.iloc[i]
-        frames = read_video_frames(self.root / row.rgb_path, self.resize_hw)
-        n = len(frames)
+        _, clip = read_selected_frames(self.root / row.rgb_path, self.pick, self.resize_hw)
         if self.train:
-            edges = np.linspace(0, n, self.num_frames + 1)
-            idx = np.minimum(np.floor(edges[:-1] + np.random.rand(self.num_frames) * np.diff(edges)), n - 1).astype(int)
-            top = np.random.randint(0, frames.shape[1] - self.size + 1)
-            left = np.random.randint(0, frames.shape[2] - self.size + 1)
-            clip = frames[idx, top:top + self.size, left:left + self.size]
-        else:
-            clip = frames[uniform_temporal_indices(n, self.num_frames)]
+            top = np.random.randint(0, clip.shape[1] - self.size + 1)
+            left = np.random.randint(0, clip.shape[2] - self.size + 1)
+            clip = clip[:, top:top + self.size, left:left + self.size]
         return to_clip_tensor(clip, self.size), int(row.label), row.sample_id
 
 

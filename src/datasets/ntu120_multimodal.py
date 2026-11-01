@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 import torch
 
-from .rgb_loader import read_video_frames, to_clip_tensor
+from .rgb_loader import read_selected_frames, to_clip_tensor
 from .skeleton_loader import load_skeleton
 from .temporal import uniform_temporal_indices
 
@@ -25,12 +25,17 @@ class NTU120Multimodal(torch.utils.data.Dataset):
 
     def __getitem__(self, i):
         row = self.df.iloc[i]
-        frames = read_video_frames(self.root / row.rgb_path, self.rgb_resize_hw)
+        seen = {}
+
+        def pick(n):
+            seen['num_frames'] = n  # the RGB frame count, reported with the item
+            return uniform_temporal_indices(n, self.num_frames)
+
+        rgb_idx, frames = read_selected_frames(self.root / row.rgb_path, pick, self.rgb_resize_hw)
         skel = load_skeleton(self.root / row.skeleton_path, self.max_bodies)
-        rgb_idx = uniform_temporal_indices(len(frames), self.num_frames)
         sk_idx = uniform_temporal_indices(skel['num_frames'], self.num_frames)
         return {
-            'rgb': to_clip_tensor(frames[rgb_idx], self.rgb_size),
+            'rgb': to_clip_tensor(frames, self.rgb_size),
             'skeleton': torch.from_numpy(skel['xyz'][:, sk_idx]),
             'label': int(row.label),
             'sample_id': row.sample_id,
@@ -39,6 +44,6 @@ class NTU120Multimodal(torch.utils.data.Dataset):
             'action_id': int(row.action_id),
             'rgb_frame_idx': torch.from_numpy(rgb_idx),
             'skeleton_frame_idx': torch.from_numpy(sk_idx),
-            'rgb_num_frames': len(frames),
+            'rgb_num_frames': seen['num_frames'],
             'skeleton_num_frames': skel['num_frames'],
         }
