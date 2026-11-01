@@ -33,6 +33,7 @@ def work(item):
     sid, rel_path = item
     s, issues = check_skeleton(ROOT / rel_path, MAX_BODIES)
     row = {'sample_id': sid, 'num_frames': s and s['num_frames'], 'num_bodies_total': s and s['num_bodies_total'],
+           'num_actors': s and s['num_actors'],
            'max_bodies_per_frame': s and s['max_bodies_per_frame'], 'issues': ';'.join(issues),
            'fatal': is_fatal(issues)}
     # float16 keeps ~2 mm precision for coordinates within a few metres and halves the cache size
@@ -72,7 +73,7 @@ def main():
     fatal, official = report.fatal, report.skeleton_official_missing
     print(f'checked {len(report)} skeletons; {len(flagged)} with any issue, {fatal.sum()} fatal')
     for kind in ['parse_error', 'empty_sequence', 'no_bodies', 'nan', 'inf', 'all_zero',
-                 'too_many_bodies', 'frames_without_body']:
+                 'too_many_bodies', 'noise_bodies_removed', 'frames_without_body']:
         print(f'  {kind:20} {report.issues.str.contains(kind, regex=False).sum()}')
     print(f'official NTU missing list: {official.sum()} present here; '
           f'{(official & fatal).sum()} of them flagged fatal by us, '

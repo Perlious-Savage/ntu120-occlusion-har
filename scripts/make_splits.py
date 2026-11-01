@@ -19,19 +19,35 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.utils.ntu import read_metadata, xset_split, xsub_split  # noqa: E402
 
 
-def subject_aware_val(train, frac, seed, tries=1000):
+def subject_aware_val(train, frac, seed, tries=10000, tolerance=0.05, balance=0.75):
     """Hold out whole subjects so no validation subject appears in internal training.
-    Tries seeded subject draws until validation covers every class present in train."""
-    subjects = np.array(sorted(train.subject_id.unique()))
-    k = max(1, round(frac * len(subjects)))
-    classes = set(train.label)
+    Subjects differ a lot in size (one NTU120 subject has 15% of X-Sub train) and NTU60 / NTU120 classes
+    were recorded with different subjects, so subjects are added in a seeded random order until they hold
+    `frac` of the training SAMPLES. The first draw (seeds tried in order from `seed`) is accepted that is
+    within `tolerance` of that target and gives every class at least `balance` x its fair share."""
+    sizes = train.groupby('subject_id').size()
+    target, classes = frac * len(train), sorted(set(train.label))
+    best = None  # (smallest class count, draw) of the draws near the target, used if none is balanced
     for t in range(tries):
-        val_subj = np.random.default_rng(seed + t).choice(subjects, k, replace=False)
+        val_subj, n = [], 0
+        for s in np.random.default_rng(seed + t).permutation(sizes.index.to_numpy()):
+            if n >= target:
+                break
+            val_subj.append(int(s))
+            n += sizes[s]
         val = train.subject_id.isin(val_subj)
-        if set(train.label[val]) == classes:
-            return val, sorted(val_subj.tolist()), seed + t
-    print(f'  WARNING: no subject draw covers all {len(classes)} classes; using last draw')
-    return val, sorted(val_subj.tolist()), seed + t
+        per_class = train.label[val].value_counts().reindex(classes, fill_value=0)
+        if abs(n - target) > tolerance * target:
+            continue
+        if per_class.min() >= balance * target / len(classes):
+            return val, sorted(val_subj), seed + t
+        if best is None or per_class.min() > best[0]:
+            best = (per_class.min(), (val, sorted(val_subj), seed + t))
+    if best is None:  # tiny local subsets: too few subjects to get near the target at all
+        print('  WARNING: no subject draw near the target size; using the first draw')
+        return val, sorted(val_subj), seed + t
+    print(f'  WARNING: no balanced subject draw; using the most balanced one ({best[0]} samples in its smallest class)')
+    return best[1]
 
 
 def stratified_val(train, frac, seed):

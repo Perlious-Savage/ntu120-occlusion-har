@@ -79,7 +79,7 @@ def main():
             ri, si = int(item['rgb_frame_idx'][p]), int(item['skeleton_frame_idx'][p])
             top, bottom = axes[0, col], axes[1, col]
             top.imshow(frames[ri])
-            for m in range(cfg['max_bodies']):
+            for m in range(skel['num_actors']):  # a single actor is also copied into slot 2; draw it once
                 draw_skeleton(top, skel['color'][:, si, :, m] * scale, BODY_COLORS[m])
                 draw_skeleton(bottom, skel['xyz'][:2, si, :, m], BODY_COLORS[m])
             top.set_title(f'RGB frame {ri}/{item["rgb_num_frames"] - 1}  |  skel frame {si}/{item["skeleton_num_frames"] - 1}',

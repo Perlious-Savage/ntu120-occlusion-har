@@ -75,9 +75,11 @@ one session: `--restore` (unpacks all tars), unzip the two skeleton zips into `d
 | Sample IDs | 114,480 (all with RGB and skeleton; 0 missing files) |
 | Usable after integrity filtering | 113,945 (the 535 samples on NTU's missing-skeleton list removed) |
 | Fatal skeleton problems found | 356 (no tracked body), all on NTU's official list |
-| X-Sub | train 63,026 / test 50,919; internal train 51,557 / val 11,469 (subjects 8, 47, 70, 82, 103) |
+| X-Sub | train 63,026 / test 50,919; internal train 56,594 / val 6,432 (7 subjects, 46-60 per class) |
 | X-Set | train 54,468 / test 59,477; internal train 49,021 / val 5,447 |
 | RGB vs skeleton frame count | identical for all 114,480 samples (min 15, max 300, mean 71.6) |
+| Noise bodies (official denoising) | removed in 3,296 samples; a simple top-2-by-motion rule would have kept one as a "person" in 2,873 (2.5%) |
+| Two-person actions with only one person ever tracked | 684 of 24,732 (Kinect limitation; the single actor is used) |
 
 ## Milestone 2 (code ready; full runs after Milestone 1 review)
 
@@ -98,11 +100,19 @@ Both baselines reach 100% training accuracy on the 64-sample overfit test. On a 
   **X-Set**: even setup IDs train, odd setup IDs test.
 - **Usable samples**: both modalities present, not on NTU's official missing-skeleton list, and no
   fatal integrity issue. The same set is used for every modality so results are comparable.
-- **Internal validation** (seed 42, 10%): X-Sub holds out whole training subjects (re-drawn with
-  incremented seeds until every class is covered); X-Set uses a class-stratified 10% split.
+- **Internal validation** (10% of each training set): X-Sub holds out whole training subjects.
+  Subjects differ a lot in size (subject 8 alone has 15% of X-Sub train), so subjects are added in
+  a seeded random order until they hold 10% of the training samples; the first draw from seed 42
+  that is within 10% +- 0.5% and gives every class >= 75% of its fair share is used (seed 51:
+  subjects 25, 53, 54, 55, 97, 98, 100). X-Set uses a class-stratified 10% split (seed 42).
   The test sets are never used for model selection.
-- **Skeleton tensor**: C x T x V x M = 3 x T x 25 x 2 (x, y, z in metres). When more than 2 people
-  are tracked, the 2 with the most motion are kept. Untracked frames are zeros.
+- **Skeleton tensor**: C x T x V x M = 3 x T x 25 x 2 (x, y, z in metres). Actors are chosen with
+  the official NTU denoising used by CTR-GCN (Microsoft SGN `get_raw_denoised_data.py`): bodies
+  tracked <= 11 frames, or wider than tall in >= 69.754% of their frames (Kinect false detections
+  such as furniture), are removed; the rest are ranked by motion; bodies whose frames do not overlap
+  an actor's span are merged into it (a person whose tracking ID changed). A single actor is copied
+  into the second slot, as the official `align_frames` does. Unlike the official code, true frame
+  numbers are kept so RGB and skeleton frames stay one-to-one. Untracked frames are zeros.
 - **Skeleton cache**: float16 (~2 mm precision) packed into one file for fast loading.
 - **RGB storage**: raw 1080p MPEG-4 takes ~2 s per video to decode, so videos are re-encoded once
   to 256 x 456 H.264 (`shrink_rgb.py`, same sample ID, every frame kept, frame count verified;

@@ -32,23 +32,83 @@ def read_skeleton_file(path):
     return num_frames, bodies, max_per_frame
 
 
-def load_skeleton(path, max_bodies=2):
-    """-> dict with xyz (3, T, 25, M) camera-space metres, color (2, T, 25, M) RGB pixel coords, counts.
+# Official NTU denoising thresholds (Microsoft SGN data_gen/get_raw_denoised_data.py, used unchanged by CTR-GCN)
+NOISE_LEN = 11            # a body tracked for <= 11 frames is noise
+NOISE_SPREAD = 0.8        # a frame is noisy when the body's x-range > 0.8 * its y-range (wider than tall)
+NOISE_SPREAD_RATE = 0.69754  # a body with >= this share of noisy frames is noise
 
-    Frames where a selected body is not tracked stay zero. When more than max_bodies people were
-    tracked, the ones with the most motion are kept.
+
+def _motion(xyz):
+    """Official 'motion': total variance of all the body's joint positions (T, 25, 3)."""
+    return float(np.var(xyz.reshape(-1, 3), axis=0).sum())
+
+
+def select_actors(bodies):
+    """Official NTU body selection -> ([body ids of actor 1], [body ids of actor 2]), and ids removed as noise.
+
+    With one tracked body it is the actor. Otherwise: drop bodies tracked <= 11 frames, then drop bodies
+    that are wider than tall in >= 69.754% of their frames (Kinect false detections such as furniture),
+    rank the rest by motion, and give the top one to actor 1. Each further body joins actor 1 if its
+    frames do not overlap actor 1's span (a person whose tracking ID changed), else actor 2 under the
+    same rule, else it is dropped. Mirrors get_raw_denoised_data.py, including its actor-2 span starting
+    at frame 0, but uses true frame numbers so RGB and skeleton frames stay aligned.
     """
-    # ponytail: motion-energy ranking only; CTR-GCN's full denoising heuristics (length/spread
-    # thresholds) are not replicated. Add them if the skeleton baseline falls well short of the paper.
+    ids = list(bodies)
+    if len(ids) == 1:
+        return [ids, []], []
+    xyz = {k: np.stack(bodies[k]['xyz']) for k in ids}
+    motion = {k: _motion(xyz[k]) for k in ids}
+    kept = [k for k in ids if len(bodies[k]['frames']) > NOISE_LEN]
+    for k in list(kept):
+        if len(kept) == 1:
+            break
+        x, y = xyz[k][:, :, 0], xyz[k][:, :, 1]
+        valid = np.ptp(x, axis=1) <= NOISE_SPREAD * np.ptp(y, axis=1)
+        if valid.all():
+            continue
+        if 1 - valid.mean() >= NOISE_SPREAD_RATE:
+            kept.remove(k)
+        else:
+            motion[k] = min(motion[k], _motion(xyz[k][valid]))
+    if not kept:  # the official code fails here; keep the longest-tracked body instead
+        kept = [max(ids, key=lambda k: len(bodies[k]['frames']))]
+    order = sorted(kept, key=lambda k: motion[k], reverse=True)
+
+    actors, (s1, e1), (s2, e2) = [[order[0]], []], (bodies[order[0]]['frames'][0], bodies[order[0]]['frames'][-1]), (0, 0)
+    for k in order[1:]:
+        s, e = bodies[k]['frames'][0], bodies[k]['frames'][-1]
+        if min(e1, e) - max(s1, s) <= 0:
+            actors[0].append(k)
+            s1, e1 = min(s, s1), max(e, e1)
+        elif min(e2, e) - max(s2, s) <= 0:
+            actors[1].append(k)
+            s2, e2 = min(s, s2), max(e, e2)
+    return actors, [k for k in ids if k not in kept]
+
+
+def load_skeleton(path, max_bodies=2, duplicate_single=True):
+    """-> dict with xyz (3, T, 25, 2) camera-space metres, color (2, T, 25, 2) RGB pixel coords, counts.
+
+    Up to two actors chosen by the official NTU denoising (select_actors). Frames where an actor is not
+    tracked stay zero. With duplicate_single, a sequence with a single actor repeats it in the second
+    slot, as the official preprocessing (align_frames) does for CTR-GCN.
+    """
+    assert max_bodies == 2, 'the official NTU actor selection is defined for two actors'
     num_frames, bodies, max_per_frame = read_skeleton_file(path)
-    ranked = sorted(bodies.values(), key=lambda b: np.stack(b['xyz']).var(axis=0).sum(), reverse=True)
-    xyz = np.zeros((3, num_frames, NUM_JOINTS, max_bodies), np.float32)
-    color = np.zeros((2, num_frames, NUM_JOINTS, max_bodies), np.float32)
-    for m, b in enumerate(ranked[:max_bodies]):
-        # select body m first (view), then frames; [:, frames, :, m] would move the frame axis to the front
-        xyz[..., m][:, b['frames']] = np.stack(b['xyz']).transpose(2, 0, 1)
-        color[..., m][:, b['frames']] = np.stack(b['color']).transpose(2, 0, 1)
-    return {'xyz': xyz, 'color': color, 'num_frames': num_frames,
+    xyz = np.zeros((3, num_frames, NUM_JOINTS, 2), np.float32)
+    color = np.zeros((2, num_frames, NUM_JOINTS, 2), np.float32)
+    actors, noise = select_actors(bodies) if bodies else ([[], []], [])
+    for m, ids in enumerate(actors):
+        for k in ids:  # later bodies overwrite a shared boundary frame, as in the official code
+            b = bodies[k]
+            # select actor m first (view), then frames; [:, frames, :, m] would move the frame axis to the front
+            xyz[..., m][:, b['frames']] = np.stack(b['xyz']).transpose(2, 0, 1)
+            color[..., m][:, b['frames']] = np.stack(b['color']).transpose(2, 0, 1)
+    num_actors = sum(bool(a) for a in actors)
+    if duplicate_single and num_actors == 1:
+        xyz[..., 1], color[..., 1] = xyz[..., 0], color[..., 0]
+    return {'xyz': xyz, 'color': color, 'num_frames': num_frames, 'num_actors': num_actors,
+            'actor_bodies': actors, 'noise_bodies': noise,
             'num_bodies_total': len(bodies), 'max_bodies_per_frame': max_per_frame}
 
 
@@ -71,6 +131,8 @@ def check_skeleton(path, max_bodies=2):
         issues.append('all_zero')
     if s['max_bodies_per_frame'] > max_bodies:
         issues.append(f'too_many_bodies({s["max_bodies_per_frame"]})')
+    if s['noise_bodies']:
+        issues.append(f'noise_bodies_removed({len(s["noise_bodies"])})')
     empty = int((~s['xyz'].any(axis=(0, 2, 3))).sum())
     if s['num_bodies_total'] and empty:
         issues.append(f'frames_without_body({empty}/{s["num_frames"]})')
