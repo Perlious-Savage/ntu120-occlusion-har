@@ -1,6 +1,6 @@
 # Occlusion-Robust RGB-Skeleton Action Recognition — NTU RGB+D 120
 
-Milestone 1: multimodal data pipeline (metadata, official splits, synchronized RGB + skeleton loading).
+Milestones 1-3: multimodal data pipeline, clean baselines, corruption benchmark and fusion baselines.
 
 ## Layout
 
@@ -12,11 +12,15 @@ data/
   metadata/      metadata.csv, integrity report, statistics, official NTU missing-skeleton list
   splits/        X-Sub / X-Set train/test + internal train/val CSVs
   processed/     rgb_256p/ (shrunk videos + frame counts), skeleton_xyz_f16.bin + skeleton_index.csv
-src/datasets/    skeleton_loader.py, rgb_loader.py, temporal.py, ntu120_multimodal.py
+src/datasets/    skeleton_loader.py, rgb_loader.py, temporal.py, ntu120_multimodal.py, baseline_datasets.py
+src/corruptions/ six corruptions (common apply(x, severity, seed)), registry.py
+src/models/      baselines.py (R3D-18, CTR-GCN), fusion.py (concat, global, attention heads)
+docs/            corruption_protocol.md
 src/utils/       ntu.py (sample-ID parser, protocols, skeleton bones)
 scripts/         command-line pipeline steps (below)
-configs/         data.yaml (all data settings, seed 42)
+configs/         data.yaml, baseline configs, corruptions.yaml, fusion.yaml (seed 42)
 outputs/         visualizations and experiment results
+results/         committed milestone results (tables, figures)
 ```
 
 ## Environment
@@ -112,6 +116,44 @@ python scripts/compare_baselines.py                              # results table
 
 Both baselines reach 100% training accuracy on the 64-sample overfit test. On a 6 GB GPU use
 `--batch-size 8 --workers 4` for local checks.
+
+## Milestone 3 commands (corruption benchmark and fusion baselines)
+
+Corruption definitions and levels: `docs/corruption_protocol.md`, `configs/corruptions.yaml`.
+The Milestone 2 checkpoints (`best_val_accuracy.pt`) stay frozen throughout.
+
+```
+python tests/test_corruptions.py                                  # determinism, S1-S5 schedules
+python scripts/person_boxes.py                                    # per-actor boxes -> data/metadata/person_boxes.csv
+python scripts/visualize_corruptions.py --n 10                    # clean / S1 / S3 / S5 examples
+
+# single-modality robustness: clean + 15 conditions of the model's modality, plus branch features
+python scripts/evaluate_corruptions.py --run outputs/r3d18_xsub_seed42 --split test
+python scripts/evaluate_corruptions.py --run outputs/ctrgcn_xsub_seed42 --split test
+python scripts/evaluate_corruptions.py --run outputs/r3d18_xsub_seed42 --split val --clean-only
+python scripts/evaluate_corruptions.py --run outputs/ctrgcn_xsub_seed42 --split val --clean-only
+python scripts/evaluate_corruptions.py --run outputs/r3d18_xsub_seed42 --split train --clean-only   # ablation only
+python scripts/evaluate_corruptions.py --run outputs/ctrgcn_xsub_seed42 --split train --clean-only  # ablation only
+
+# fusion baselines (average, concat, global, attention), tested on 46 conditions without retraining
+python scripts/train_fusion.py --protocol xsub --method attention
+python scripts/train_fusion.py --protocol xsub --method attention --train-split train --epochs 30   # ablation
+
+python scripts/m3_report.py                                       # results/milestone3: CSVs, tables, figures
+```
+
+Repeat with `xset` for X-Set. Each `evaluate_corruptions.py` run writes resumable shards, so a
+reclaimed Colab session continues where it stopped. On an A100, the RGB test benchmark takes about
+20-25 minutes per protocol and the skeleton benchmark about 10 minutes.
+
+**Fusion training data.** Both frozen backbones fit their own training data almost perfectly
+(R3D-18 99.98%, CTR-GCN 99.6-99.9%). Heads trained on those features cannot learn when a branch
+fails; attention fusion collapsed onto RGB, with a weight of 1.0 for every sample. The fusion heads
+are therefore trained on the held-out validation split, where the backbones make realistic errors.
+5-fold class-stratified cross-validation inside that split picks the stopping epoch. Subject-grouped
+folds were tried for X-Sub and fail: NTU-120 ties actions to subject groups, so a held-out fold can
+contain classes missing from its training part. The test set is never used. Training on the training
+features is kept as an ablation in `outputs/m3_fusion_trainfeat/`.
 
 ## Decisions (documented per the milestone rules)
 

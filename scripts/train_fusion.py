@@ -113,12 +113,12 @@ def fit(cfg, method, tr, ev, device, keep_epoch=None):
     return log, head, best[2]
 
 
-def cv_folds(protocol, ids, y, k, seed):
-    """X-Sub: folds grouped by subject (no subject on both sides); X-Set: stratified by class."""
-    from sklearn.model_selection import GroupKFold, StratifiedKFold
-    if protocol == 'xsub':
-        subjects = [int(s[9:12]) for s in ids]                       # S001C001P003R001A001 -> 3
-        return list(GroupKFold(n_splits=k).split(ids, y, subjects))
+def cv_folds(ids, y, k, seed):
+    """Class-stratified folds for both protocols. Subject-grouped folds do not work for X-Sub: NTU-120
+    ties actions to subject groups (the 60 added actions were recorded by other subjects), so a
+    subject-held-out fold can contain classes absent from its training part (0% held-out accuracy).
+    The folds only choose a stopping epoch; the test split stays subject-disjoint."""
+    from sklearn.model_selection import StratifiedKFold
     return list(StratifiedKFold(n_splits=k, shuffle=True, random_state=seed).split(ids, y))
 
 
@@ -133,7 +133,7 @@ def train(cfg, method, feats_train, feats_val, device, run):
         log, head, epoch = fit(cfg, method, (fr, fs, y), (vr, vs, vy), device)
         print(f'best epoch {epoch} (0-based), val top-1 {log[epoch]["val_accuracy"]:.4f}', flush=True)
     else:
-        folds = cv_folds(cfg['protocol'], vids, vy, cfg['cv_folds'], cfg['seed'])
+        folds = cv_folds(vids, vy, cfg['cv_folds'], cfg['seed'])
         acc = []
         for f, (a, b) in enumerate(folds):
             flog, _, _ = fit(cfg, method, (vr[a], vs[a], vy[a]), (vr[b], vs[b], vy[b]), device)

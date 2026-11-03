@@ -216,8 +216,8 @@ def main():
         cls[p].to_csv(OUT / f'class_modality_{p}.csv', index=False)
 
     md = ['# Milestone 3 results', '',
-          'Top-1 accuracy (%) on the official test splits. Frozen Milestone 2 backbones (seed 42); fusion heads '
-          'trained on clean features only and tested under corruption without retraining. Corruption definitions: '
+          'Top-1 accuracy (%) on the official test splits. Frozen Milestone 2 backbones (seed 42); fusion heads trained on clean features of the held-out validation split (5-fold CV picks the stopping epoch) '
+          'and tested under corruption without retraining. Corruption definitions: '
           '`docs/corruption_protocol.md`.', '']
     for p in PROTOCOLS:
         md += [f'## {p.upper()}', '', '### Single-modality robustness (3.6)', '']

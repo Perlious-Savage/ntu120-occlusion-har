@@ -11,7 +11,7 @@ dropout: 0.5
 # so heads trained on training features cannot learn when a branch fails. k-fold CV inside the
 # validation split chooses where to stop.
 train_split: val         # val (main) | train (ablation, written to <output_dir>_trainfeat)
-cv_folds: 5              # X-Sub folds grouped by subject, X-Set stratified by class
+cv_folds: 5              # class-stratified (subject-grouped folds lose whole classes in NTU-120)
 epochs: 100              # maximum; CV picks the stopping epoch (the train-feature ablation uses 30)
 batch_size: 256
 optimizer: {name: adamw, lr: 0.001, weight_decay: 0.01}
