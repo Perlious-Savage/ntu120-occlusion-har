@@ -2,7 +2,7 @@
 # Features come from scripts/evaluate_corruptions.py: <features_dir>/<branch run>/<split>/<condition>/
 seed: 42
 features_dir: outputs/m3_robustness
-branch_runs: {rgb: r3d18_{protocol}_seed42, skeleton: ctrgcn_{protocol}_seed42}
+branch_runs: {rgb: 'r3d18_{protocol}_seed42', skeleton: 'ctrgcn_{protocol}_seed42'}
 num_classes: 120
 
 latent_dim: 256          # both branches projected to this size; fixed across all fusion experiments

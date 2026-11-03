@@ -86,7 +86,8 @@ def train(cfg, method, feats_train, feats_val, device, run):
     gen = torch.Generator(device='cpu').manual_seed(cfg['seed'])
     best, log = (-1, None, -1), []
     for epoch in range(cfg['epochs']):
-        t0, head.train()
+        t0 = time.time()
+        head.train()
         total = correct = 0
         for idx in torch.randperm(len(yt), generator=gen).split(cfg['batch_size']):
             idx = idx.to(device)
