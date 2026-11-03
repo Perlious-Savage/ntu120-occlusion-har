@@ -21,7 +21,6 @@ LOWER_BODY = [0] + LEFT_LEG + RIGHT_LEG
 class SkeletonPartDropout(Corruption):
     name = 'skeleton_part_dropout'
     modality = 'skeleton'
-    levels = ('one_leg', 'one_arm', 'lower_body', 'upper_body', 'upper_body_one_leg')
 
     def _apply(self, x, level, rng, **_):
         leg = LEFT_LEG if rng.random() < 0.5 else RIGHT_LEG

@@ -13,7 +13,6 @@ from .base import Corruption
 class RGBOcclusion(Corruption):
     name = 'rgb_occlusion'
     modality = 'rgb'
-    levels = (0.10, 0.20, 0.30, 0.40, 0.50)
 
     def _apply(self, x, frac, rng, boxes=None, **_):
         _, h, w, _ = x.shape

@@ -9,7 +9,6 @@ from .base import Corruption, skeleton_slots
 class SkeletonJointDropout(Corruption):
     name = 'skeleton_joint_dropout'
     modality = 'skeleton'
-    levels = (0.05, 0.10, 0.20, 0.30, 0.40)
 
     def _apply(self, x, p, rng, **_):
         slots = skeleton_slots(x)

@@ -20,7 +20,6 @@ def body_scale(person):
 class SkeletonNoise(Corruption):
     name = 'skeleton_noise'
     modality = 'skeleton'
-    levels = (0.01, 0.02, 0.04, 0.08, 0.12)
 
     def _apply(self, x, alpha, rng, **_):
         slots = skeleton_slots(x)

@@ -14,7 +14,7 @@ SEVERITIES = (1, 2, 3, 4, 5)
 class Corruption:
     name = ''
     modality = ''   # 'rgb' or 'skeleton'
-    levels = ()     # one parameter per severity S1-S5 (documented in each module)
+    levels = ()     # S1-S5 parameters, set from configs/corruptions.yaml by registry.py
 
     def apply(self, x, severity, seed, **context):
         if severity == 0:

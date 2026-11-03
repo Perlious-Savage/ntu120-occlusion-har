@@ -9,7 +9,6 @@ from .base import Corruption
 class RGBTemporalMask(Corruption):
     name = 'rgb_temporal_mask'
     modality = 'rgb'
-    levels = (0.10, 0.20, 0.30, 0.40, 0.50)
 
     def _apply(self, x, frac, rng, **_):
         t = len(x)

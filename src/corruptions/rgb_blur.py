@@ -8,7 +8,6 @@ from .base import Corruption
 class RGBBlur(Corruption):
     name = 'rgb_blur'
     modality = 'rgb'
-    levels = (3, 5, 7, 11, 15)
 
     def _apply(self, x, k, rng, **_):
         for t in range(len(x)):
