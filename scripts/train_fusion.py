@@ -74,17 +74,19 @@ def infer(head, fr, fs, device, bs=4096):
     return probs, (None if weights[0] is None else torch.cat(weights).numpy())
 
 
-def train(cfg, method, feats_train, feats_val, device, run):
-    fr, fs, _, _, y, _ = feats_train.pair('clean', 'clean')
-    vr, vs, _, _, vy, _ = feats_val.pair('clean', 'clean')
+def fit(cfg, method, tr, ev, device, keep_epoch=None):
+    """Train one head for cfg['epochs'] epochs on tr = (f_rgb, f_sk, y), evaluating on ev after every
+    epoch (ev may be None). Returns (log rows, head with the weights of keep_epoch, or of the best ev
+    epoch, that epoch)."""
+    seed_everything(cfg['seed'])
+    fr, fs, y = tr
     head = FusionHead(method, fr.shape[1], fs.shape[1], cfg['latent_dim'], cfg['num_classes'], cfg['dropout']).to(device)
     o = cfg['optimizer']
     opt = torch.optim.AdamW(head.parameters(), lr=o['lr'], weight_decay=o['weight_decay'])
-    steps = cfg['epochs'] * int(np.ceil(len(y) / cfg['batch_size']))
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, steps)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, cfg['epochs'] * int(np.ceil(len(y) / cfg['batch_size'])))
     fr, fs, yt = (torch.from_numpy(a).to(device) for a in (fr, fs, y))
     gen = torch.Generator(device='cpu').manual_seed(cfg['seed'])
-    best, log = (-1, None, -1), []
+    best, log = (-1.0, None, -1), []
     for epoch in range(cfg['epochs']):
         t0 = time.time()
         head.train()
@@ -95,21 +97,58 @@ def train(cfg, method, feats_train, feats_val, device, run):
             loss = F.cross_entropy(logits, yt[idx])
             opt.zero_grad(set_to_none=True); loss.backward(); opt.step(); sched.step()
             total += loss.item() * len(idx); correct += (logits.argmax(1) == yt[idx]).sum().item()
-        vp, vw = infer(head, vr, vs, device)
-        m = classification_metrics(vp, vy, cfg['num_classes'])
-        row = {'epoch': epoch, 'train_loss': total / len(yt), 'train_accuracy': correct / len(yt),
-               'val_loss': float(F.nll_loss(torch.log(torch.from_numpy(vp) + 1e-12), torch.from_numpy(vy))),
-               'val_accuracy': m['top1_accuracy'], 'val_macro_f1': m['macro_f1'],
-               'val_mean_w_rgb': float('nan') if vw is None else float(vw[:, 0].mean()),
-               'epoch_seconds': time.time() - t0}
+        row = {'epoch': epoch, 'train_loss': total / len(yt), 'train_accuracy': correct / len(yt)}
+        if ev is not None:
+            vp, vw = infer(head, ev[0], ev[1], device)
+            m = classification_metrics(vp, ev[2], cfg['num_classes'])
+            row.update(val_loss=float(F.nll_loss(torch.log(torch.from_numpy(vp) + 1e-12), torch.from_numpy(ev[2]))),
+                       val_accuracy=m['top1_accuracy'], val_macro_f1=m['macro_f1'],
+                       val_mean_w_rgb=float('nan') if vw is None else float(vw[:, 0].mean()))
+        row['epoch_seconds'] = time.time() - t0
         log.append(row)
-        print(' '.join(f'{k} {v:.4f}' if isinstance(v, float) else f'{k} {v}' for k, v in row.items()), flush=True)
-        if m['top1_accuracy'] > best[0]:
-            best = (m['top1_accuracy'], {k: v.detach().clone() for k, v in head.state_dict().items()}, epoch)
-    pd.DataFrame(log).to_csv(run / 'training_log.csv', index=False)
+        score = row.get('val_accuracy', 0.0)
+        if (keep_epoch is None and score > best[0]) or epoch == keep_epoch:
+            best = (score, {k: v.detach().clone() for k, v in head.state_dict().items()}, epoch)
     head.load_state_dict(best[1])
-    torch.save({'epoch': best[2], 'method': method, 'model_state_dict': best[1], 'config': cfg}, run / 'checkpoint.pt')
-    print(f'best epoch {best[2]} (0-based), val top-1 {best[0]:.4f}', flush=True)
+    return log, head, best[2]
+
+
+def cv_folds(protocol, ids, y, k, seed):
+    """X-Sub: folds grouped by subject (no subject on both sides); X-Set: stratified by class."""
+    from sklearn.model_selection import GroupKFold, StratifiedKFold
+    if protocol == 'xsub':
+        subjects = [int(s[9:12]) for s in ids]                       # S001C001P003R001A001 -> 3
+        return list(GroupKFold(n_splits=k).split(ids, y, subjects))
+    return list(StratifiedKFold(n_splits=k, shuffle=True, random_state=seed).split(ids, y))
+
+
+def train(cfg, method, feats_train, feats_val, device, run):
+    """Main protocol (train_split: val): heads learn from the held-out validation split, where the
+    frozen branches make realistic errors. k-fold CV inside it picks the stopping epoch; the final
+    head is trained on all of it with the same schedule and stopped at that epoch.
+    Ablation (train_split: train): train on the branches' own training features, select on val."""
+    vr, vs, _, _, vy, vids = feats_val.pair('clean', 'clean')
+    if cfg['train_split'] == 'train':
+        fr, fs, _, _, y, _ = feats_train.pair('clean', 'clean')
+        log, head, epoch = fit(cfg, method, (fr, fs, y), (vr, vs, vy), device)
+        print(f'best epoch {epoch} (0-based), val top-1 {log[epoch]["val_accuracy"]:.4f}', flush=True)
+    else:
+        folds = cv_folds(cfg['protocol'], vids, vy, cfg['cv_folds'], cfg['seed'])
+        acc = []
+        for f, (a, b) in enumerate(folds):
+            flog, _, _ = fit(cfg, method, (vr[a], vs[a], vy[a]), (vr[b], vs[b], vy[b]), device)
+            acc.append([r['val_accuracy'] for r in flog])
+            print(f'fold {f}: {len(a)} train / {len(b)} held out, best held-out top-1 {max(acc[-1]):.4f} '
+                  f'at epoch {int(np.argmax(acc[-1]))}', flush=True)
+        acc = np.array(acc)
+        epoch = int(acc.mean(0).argmax())
+        pd.DataFrame(acc.T, columns=[f'fold{f}' for f in range(len(folds))]).assign(
+            mean=acc.mean(0), epoch=range(acc.shape[1])).to_csv(run / 'cv_accuracy.csv', index=False)
+        print(f'cross-validated stopping epoch {epoch} (0-based), mean held-out top-1 {acc.mean(0)[epoch]:.4f}', flush=True)
+        log, head, _ = fit(cfg, method, (vr, vs, vy), None, device, keep_epoch=epoch)
+    pd.DataFrame(log).to_csv(run / 'training_log.csv', index=False)
+    torch.save({'epoch': epoch, 'method': method, 'model_state_dict': head.state_dict(), 'config': cfg},
+               run / 'checkpoint.pt')
     return head
 
 
@@ -118,11 +157,18 @@ def main():
     ap.add_argument('--config', default='configs/fusion.yaml')
     ap.add_argument('--protocol', required=True, choices=['xsub', 'xset'])
     ap.add_argument('--method', required=True, choices=METHODS)
+    ap.add_argument('--train-split', choices=['val', 'train'], help='override config train_split (train = ablation)')
+    ap.add_argument('--epochs', type=int, help='override config epochs')
     args = ap.parse_args()
     cfg = yaml.safe_load(open(args.config))
     cfg.update(protocol=args.protocol, method=args.method)
+    if args.train_split:
+        cfg['train_split'] = args.train_split
+    if args.epochs:
+        cfg['epochs'] = args.epochs
     seed_everything(cfg['seed'])
-    run = Path(cfg['output_dir']) / f'{args.method}_{args.protocol}_seed{cfg["seed"]}'
+    out = Path(cfg['output_dir'] + ('' if cfg['train_split'] == 'val' else '_trainfeat'))
+    run = out / f'{args.method}_{args.protocol}_seed{cfg["seed"]}'
     run.mkdir(parents=True, exist_ok=True)
     yaml.safe_dump(cfg, open(run / 'config.yaml', 'w'), sort_keys=False)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
