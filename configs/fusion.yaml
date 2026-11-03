@@ -13,6 +13,7 @@ dropout: 0.5
 train_split: val         # val (main) | train (ablation, written to <output_dir>_trainfeat)
 cv_folds: 5              # class-stratified (subject-grouped folds lose whole classes in NTU-120)
 epochs: 100              # maximum; CV picks the stopping epoch (the train-feature ablation uses 30)
+aux_weight: 1.0          # + aux_weight * (CE(RGB aux head) + CE(skeleton aux head)); 0 = ablation (attention collapses onto RGB)
 batch_size: 256
 optimizer: {name: adamw, lr: 0.001, weight_decay: 0.01}
 scheduler: {name: cosine}

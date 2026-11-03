@@ -93,8 +93,10 @@ def fit(cfg, method, tr, ev, device, keep_epoch=None):
         total = correct = 0
         for idx in torch.randperm(len(yt), generator=gen).split(cfg['batch_size']):
             idx = idx.to(device)
-            logits, _ = head(fr[idx], fs[idx])
+            logits, _, (ar, asl) = head(fr[idx], fs[idx], aux=True)
             loss = F.cross_entropy(logits, yt[idx])
+            if cfg['aux_weight']:
+                loss = loss + cfg['aux_weight'] * (F.cross_entropy(ar, yt[idx]) + F.cross_entropy(asl, yt[idx]))
             opt.zero_grad(set_to_none=True); loss.backward(); opt.step(); sched.step()
             total += loss.item() * len(idx); correct += (logits.argmax(1) == yt[idx]).sum().item()
         row = {'epoch': epoch, 'train_loss': total / len(yt), 'train_accuracy': correct / len(yt)}
@@ -159,6 +161,7 @@ def main():
     ap.add_argument('--method', required=True, choices=METHODS)
     ap.add_argument('--train-split', choices=['val', 'train'], help='override config train_split (train = ablation)')
     ap.add_argument('--epochs', type=int, help='override config epochs')
+    ap.add_argument('--aux-weight', type=float, help='override config aux_weight (0 = ablation, written to <output_dir>_noaux)')
     args = ap.parse_args()
     cfg = yaml.safe_load(open(args.config))
     cfg.update(protocol=args.protocol, method=args.method)
@@ -166,8 +169,10 @@ def main():
         cfg['train_split'] = args.train_split
     if args.epochs:
         cfg['epochs'] = args.epochs
+    if args.aux_weight is not None:
+        cfg['aux_weight'] = args.aux_weight
     seed_everything(cfg['seed'])
-    out = Path(cfg['output_dir'] + ('' if cfg['train_split'] == 'val' else '_trainfeat'))
+    out = Path(cfg['output_dir'] + ('_trainfeat' if cfg['train_split'] == 'train' else '_noaux' if not cfg['aux_weight'] else ''))
     run = out / f'{args.method}_{args.protocol}_seed{cfg["seed"]}'
     run.mkdir(parents=True, exist_ok=True)
     yaml.safe_dump(cfg, open(run / 'config.yaml', 'w'), sort_keys=False)
