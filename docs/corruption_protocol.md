@@ -94,6 +94,35 @@ Six modality-specific corruptions, each with severities S1-S5. Code: `src/corrup
   (20 of 25 joints) are the harshest settings. They follow the guide's suggested schedule.
 - S5 blur (15 px kernel at 112 px) still shows the body outline but no limb detail.
 
+## Note on temporal masking (measured, X-Sub test, R3D-18)
+
+The mask replaces frames with **black** frames. Black frames are far outside R3D-18's training
+distribution, so the model's response depends on more than the number of frames removed:
+
+- **Accuracy by severity:**
+
+  | Severity | Black frames (of 16) | Top-1 |
+  |---|---|---|
+  | Clean | 0 | 85.8% |
+  | S1 | 2 | 45.8% |
+  | S2 | 3 | 53.3% |
+  | S3 | 5 | 35.1% |
+  | S5 | 8 | 12.4% |
+
+- **S2 scores higher than S1,** even though it masks more frames.
+- **The S1 mask count is correct.** The unit tests confirm 2, 3, 5, 6 and 8 frames at S1-S5.
+- **Position matters.** A block near the clip edges costs about 20 points; one in the middle costs
+  40-60 points. For example, S1 starting at frame 11 gives 24.6%, while starting at frame 0 gives 65.7%.
+- **More frames can score higher.** At the same start frame, 3 black frames often beat 2 (start 3:
+  61.4% against 45.7%).
+
+**Interpretation.** The drop measures the model's fragility to an abrupt blackout, not only the
+information that was lost. This is a property of the RGB branch that a reliability-aware fusion
+should detect.
+
+**The definition is kept as specified.** A "freeze" variant (repeating the last visible frame) would
+separate the information lost from the black-frame artifact; it is not part of this benchmark.
+
 ## Benchmark runs
 
 - **Script.** `scripts/evaluate_corruptions.py` evaluates each frozen Milestone 2 checkpoint
