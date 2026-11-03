@@ -1,9 +1,10 @@
-# data is rebuilt from the raw NTU zips (see README); only the official missing-skeleton list is tracked
+# data is rebuilt from the raw NTU zips (see README); only small metadata files are tracked
 data/*
 !data/metadata/
 data/metadata/*
 !data/metadata/NTU_RGBD120_samples_with_missing_skeletons.txt
 !data/metadata/ntu120_action_names.csv
+!data/metadata/person_boxes.csv
 outputs/
 __pycache__/
 *.pyc
