@@ -46,10 +46,13 @@ class Features:
         return (np.load(d / 'features.npy').astype(np.float32), np.load(d / 'probabilities.npy').astype(np.float32),
                 pred.true_label.to_numpy(), pred.sample_id.to_numpy())
 
-    def pair(self, rgb_condition, sk_condition):
+    def pair(self, rgb_condition, sk_condition, with_logp=False):
+        """with_logp: append each branch's log-probabilities to its features (attention fusion input)."""
         fr, pr, y, ids = self.load('rgb', rgb_condition)
         fs, ps, y2, ids2 = self.load('skeleton', sk_condition)
         assert (ids == ids2).all() and (y == y2).all(), 'RGB and skeleton rows differ'
+        if with_logp:
+            fr, fs = (np.concatenate([f, np.log(np.clip(q, 1e-6, 1))], 1).astype(np.float32) for f, q in ((fr, pr), (fs, ps)))
         return fr, fs, pr, ps, y, ids
 
 
@@ -93,10 +96,10 @@ def fit(cfg, method, tr, ev, device, keep_epoch=None):
         total = correct = 0
         for idx in torch.randperm(len(yt), generator=gen).split(cfg['batch_size']):
             idx = idx.to(device)
-            logits, _, (ar, asl) = head(fr[idx], fs[idx], aux=True)
+            logits, _, branch = head(fr[idx], fs[idx], aux=True)
             loss = F.cross_entropy(logits, yt[idx])
-            if cfg['aux_weight']:
-                loss = loss + cfg['aux_weight'] * (F.cross_entropy(ar, yt[idx]) + F.cross_entropy(asl, yt[idx]))
+            if cfg['aux_weight'] and branch is not None:
+                loss = loss + cfg['aux_weight'] * sum(F.cross_entropy(b, yt[idx]) for b in branch)
             opt.zero_grad(set_to_none=True); loss.backward(); opt.step(); sched.step()
             total += loss.item() * len(idx); correct += (logits.argmax(1) == yt[idx]).sum().item()
         row = {'epoch': epoch, 'train_loss': total / len(yt), 'train_accuracy': correct / len(yt)}
@@ -129,9 +132,10 @@ def train(cfg, method, feats_train, feats_val, device, run):
     frozen branches make realistic errors. k-fold CV inside it picks the stopping epoch; the final
     head is trained on all of it with the same schedule and stopped at that epoch.
     Ablation (train_split: train): train on the branches' own training features, select on val."""
-    vr, vs, _, _, vy, vids = feats_val.pair('clean', 'clean')
+    lp = method == 'attention'
+    vr, vs, _, _, vy, vids = feats_val.pair('clean', 'clean', lp)
     if cfg['train_split'] == 'train':
-        fr, fs, _, _, y, _ = feats_train.pair('clean', 'clean')
+        fr, fs, _, _, y, _ = feats_train.pair('clean', 'clean', lp)
         log, head, epoch = fit(cfg, method, (fr, fs, y), (vr, vs, vy), device)
         print(f'best epoch {epoch} (0-based), val top-1 {log[epoch]["val_accuracy"]:.4f}', flush=True)
     else:
@@ -183,7 +187,7 @@ def main():
         head = train(cfg, args.method, Features(cfg, args.protocol, 'train'), Features(cfg, args.protocol, 'val'), device, run)
     test, rows = Features(cfg, args.protocol, 'test'), []
     for rc, sc in test_conditions(cfg):
-        fr, fs, pr, ps, y, ids = test.pair(rc, sc)
+        fr, fs, pr, ps, y, ids = test.pair(rc, sc, args.method == 'attention')
         if head is None:
             probs, w = (pr + ps) / 2, np.full((len(y), 2), 0.5, dtype=np.float32)
         else:
