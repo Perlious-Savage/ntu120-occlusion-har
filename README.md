@@ -146,14 +146,24 @@ Repeat with `xset` for X-Set. Each `evaluate_corruptions.py` run writes resumabl
 reclaimed Colab session continues where it stopped. On an A100, the RGB test benchmark takes about
 20-25 minutes per protocol and the skeleton benchmark about 10 minutes.
 
-**Fusion training data.** Both frozen backbones fit their own training data almost perfectly
-(R3D-18 99.98%, CTR-GCN 99.6-99.9%). Heads trained on those features cannot learn when a branch
-fails; attention fusion collapsed onto RGB, with a weight of 1.0 for every sample. The fusion heads
-are therefore trained on the held-out validation split, where the backbones make realistic errors.
-5-fold class-stratified cross-validation inside that split picks the stopping epoch. Subject-grouped
-folds were tried for X-Sub and fail: NTU-120 ties actions to subject groups, so a held-out fold can
-contain classes missing from its training part. The test set is never used. Training on the training
-features is kept as an ablation in `outputs/m3_fusion_trainfeat/`.
+**Fusion training data and design.** Both frozen backbones fit their own training data almost
+perfectly (R3D-18 99.98%, CTR-GCN 99.6-99.9%). Each baseline is reported in its strongest setting;
+all settings are compared in `results/milestone3/fusion_ablation.csv`.
+
+| Head | Trained on | Why |
+|---|---|---|
+| Concat, global | training features (epoch chosen on validation) | The extra data helps more than held-out errors (X-Sub clean 89.9% vs 88.2%, mCA 84.2% vs 81.9%). |
+| Attention | held-out validation split (5-fold CV picks the stopping epoch) | It must learn from the frozen branches' genuine errors. |
+
+**Attention design.** The attention head weights the frozen branches' log-probabilities, and its
+gate reads the projected features. Gates that weight retrained branch heads saturate onto RGB, with
+a weight of 1.0 for every sample. The gate learns from samples the retrained RGB head already gets
+right, so RGB always looks safe. `scripts/compare_attention_variants.py` reproduces the comparison
+on validation data only.
+
+**Cross-validation folds.** The folds are class-stratified. Subject-grouped folds fail for X-Sub:
+NTU-120 ties actions to subject groups, so a held-out fold can contain classes that are missing from
+its training part. The test set is never used for any choice.
 
 ## Decisions (documented per the milestone rules)
 
