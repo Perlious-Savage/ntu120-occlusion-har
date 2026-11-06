@@ -23,7 +23,12 @@ import pandas as pd  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.corruptions.registry import RGB, SKELETON  # noqa: E402
 
-ROB, FUS, OUT = Path('outputs/m3_robustness'), Path('outputs/m3_fusion'), Path('results/milestone3')
+ROB, OUT = Path('outputs/m3_robustness'), Path('results/milestone3')
+# Each baseline is reported in its strongest training setting (fusion_ablation.csv): concat and global
+# gain more from the 56k training features than from seeing held-out errors; attention needs the
+# genuine errors of the frozen branches on the held-out validation split. The others are ablations.
+FUSION_SOURCE = {'average': 'outputs/m3_fusion', 'concat': 'outputs/m3_fusion_trainfeat',
+                 'global': 'outputs/m3_fusion_trainfeat', 'attention': 'outputs/m3_fusion'}
 PROTOCOLS = ['xsub', 'xset']
 FUSION = ['average', 'concat', 'global', 'attention']
 METHODS = ['rgb_only', 'skeleton_only'] + FUSION
@@ -58,7 +63,7 @@ def long_table():
                          'skeleton_corruption': r.corruption, 'skeleton_severity': r.severity,
                          'top1_accuracy': r.top1_accuracy, 'top5_accuracy': r.top5_accuracy, 'macro_f1': r.macro_f1})
         for m in FUSION:
-            f = FUS / f'{m}_{p}_seed42' / 'summary.csv'
+            f = Path(FUSION_SOURCE[m]) / f'{m}_{p}_seed42' / 'summary.csv'
             if f.exists():
                 rows += pd.read_csv(f).assign(protocol=p, method=m).to_dict('records')
             else:
@@ -225,9 +230,11 @@ def main():
         cls[p].to_csv(OUT / f'class_modality_{p}.csv', index=False)
 
     md = ['# Milestone 3 results', '',
-          'Top-1 accuracy (%) on the official test splits. Frozen Milestone 2 backbones (seed 42); fusion heads trained on clean features of the held-out validation split (5-fold CV picks the stopping epoch) '
-          'and tested under corruption without retraining. Corruption definitions: '
-          '`docs/corruption_protocol.md`.', '']
+          'Top-1 accuracy (%) on the official test splits. Frozen Milestone 2 backbones (seed 42). Fusion heads are '
+          'trained on clean features only and tested under corruption without retraining. Each is reported in '
+          'its strongest setting: concat and global on the training features (epoch chosen on validation), '
+          'attention on the held-out validation split (5-fold CV picks the stopping epoch). The other '
+          'settings are in `fusion_ablation.csv`. Corruption definitions: `docs/corruption_protocol.md`.', '']
     for p in PROTOCOLS:
         md += [f'## {p.upper()}', '', '### Single-modality robustness (3.6)', '']
         rows = []
