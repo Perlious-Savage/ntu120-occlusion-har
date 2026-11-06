@@ -7,9 +7,9 @@ C  mix the logits of refitted branch heads U h (trained by the auxiliary losses)
 D  mix the FROZEN branch log-probabilities; the gate reads the projected features.
    This is FusionHead('attention').
 
-Measured (seed 42, CV top-1; RGB weight mean / per-fold collapse):
-  X-Sub  A 0.932  B 0.933 (both 1.000 in every fold)   C 0.965 (0.54)          D 0.923 (0.45-0.61)
-  X-Set  A 0.929  B 0.928 (both 1.000 in every fold)   C 0.938 (3 of 5 folds 1.000)   D 0.966 (0.49-0.57)
+Measured (seed 42, CV top-1; mean RGB weight per fold):
+  X-Sub  A 0.932  B 0.933 (1.00 in every fold)   C 0.965 (0.53-0.55)                 D 0.923 (0.51-0.55)
+  X-Set  A 0.929  B 0.928 (1.00 in every fold)   C 0.938 (3 of 5 folds at 1.00)      D 0.966 (0.44-0.58)
 A-C refit classifiers on the same samples the gate learns from: the refitted RGB head is right on
 almost all of them, so the gate saturates onto RGB. C's X-Sub CV is also optimistic (test 0.883).
 D keeps the frozen backbones, whose errors on the validation split are genuine; it beats average

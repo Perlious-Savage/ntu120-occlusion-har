@@ -171,14 +171,23 @@ def class_scatter(cls, path):
         ax.plot([0, 100], [0, 100], color='#a3a29c', lw=1, ls='--')
         ax.scatter(100 * d.skeleton_accuracy, 100 * d.rgb_accuracy, s=22, color=COLOR['rgb_only'],
                    edgecolor='#fcfcfb', linewidth=1)
-        for _, r in pd.concat([d.head(4), d.tail(4)]).iterrows():   # largest gaps either way
-            ax.annotate(r['name'], (100 * r.skeleton_accuracy, 100 * r.rgb_accuracy), fontsize=7, color='#52514e',
-                        xytext=(4, -3), textcoords='offset points')
-        n = d.dominance.value_counts()
-        style(ax, f'{p.upper()}: {n.get("RGB-dominant", 0)} RGB-dominant, {n.get("balanced", 0)} balanced, '
-                  f'{n.get("skeleton-dominant", 0)} skeleton-dominant (±{DOMINANCE_PTS:g} pts)',
-              'skeleton accuracy (%)', 'RGB accuracy (%)')
         lo = 100 * min(d.rgb_accuracy.min(), d.skeleton_accuracy.min()) - 3
+        gap = (101 - lo) / 22                                          # minimum vertical label spacing
+        # the 3 largest gaps either way: RGB-dominant labels go left of their point, skeleton-dominant
+        # labels right; labels on the same side are pushed apart vertically so they never overlap
+        for rows, side in ((d.head(3), -1), (d.tail(3), 1)):
+            placed = []
+            for _, r in rows.sort_values('rgb_accuracy', ascending=False).iterrows():
+                x, y = 100 * r.skeleton_accuracy, 100 * r.rgb_accuracy
+                ty = min([y] + [q - gap for q in placed if abs(q - y) < gap])
+                placed.append(ty)
+                ax.annotate(r['name'], (x, y), xytext=(x + side * 2.5, ty), fontsize=7, color='#52514e',
+                            ha='left' if side > 0 else 'right', va='center',
+                            arrowprops=dict(arrowstyle='-', color='#a3a29c', lw=0.6))
+        n = d.dominance.value_counts()
+        style(ax, f'{p.upper()}: {n.get("RGB-dominant", 0)} RGB-dominant, {n.get("balanced", 0)} balanced,\n'
+                  f'{n.get("skeleton-dominant", 0)} skeleton-dominant (gap of at least {DOMINANCE_PTS:g} points)',
+              'skeleton accuracy (%)', 'RGB accuracy (%)')
         ax.set_xlim(lo, 101); ax.set_ylim(lo, 101); ax.set_aspect('equal'); ax.grid(color='#e6e5e0', lw=0.8)
     fig.suptitle('Per-class clean test accuracy: RGB vs skeleton (above the line = RGB better)', fontsize=11, x=0.01, ha='left')
     fig.tight_layout(); fig.savefig(path, dpi=150); plt.close(fig)

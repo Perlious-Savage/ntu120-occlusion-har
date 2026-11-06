@@ -1,0 +1,19 @@
+setting,method,protocol,clean,mCA_all,mean_w_rgb_clean
+"training features, no aux loss",concat,xsub,0.8988000549892967,0.8419974207401298,
+"training features, no aux loss",concat,xset,0.9217848916387849,0.8639631005822979,
+"training features, no aux loss",global,xsub,0.8984269133329406,0.8460181857459887,0.5634775161743164
+"training features, no aux loss",global,xset,0.920759285101804,0.8665495345539733,0.5602936744689941
+"training features, no aux loss",attention,xsub,0.8986625817474813,0.8366680413990849,0.6531395316123962
+"training features, no aux loss",attention,xset,0.9254165475730114,0.871814314777141,0.5728731751441956
+"validation split, no aux loss",concat,xsub,0.8867220487440838,0.8198360795249973,
+"validation split, no aux loss",concat,xset,0.9179346638196276,0.8474592419478678,
+"validation split, no aux loss",global,xsub,0.8842082523223158,0.8234418062674707,0.5434736013412476
+"validation split, no aux loss",global,xset,0.9179682902634632,0.8557571274049913,0.5476732850074768
+"validation split, no aux loss",attention,xsub,0.8322433669160824,0.6919407948571913,1.0
+"validation split, no aux loss",attention,xset,0.865628730433613,0.7157999450768086,1.0
+validation split + aux loss (main),concat,xsub,0.8822050707987196,0.819411876378824,
+validation split + aux loss (main),concat,xset,0.9191956554634564,0.8547410483604306,
+validation split + aux loss (main),global,xsub,0.8799269427914924,0.8135031455186996,0.5586985945701599
+validation split + aux loss (main),global,xset,0.9144375136607428,0.845061116061671,0.5676817297935486
+validation split + aux loss (main),attention,xsub,0.8992517527838332,0.848490085560727,0.558997631072998
+validation split + aux loss (main),attention,xset,0.9286278729592952,0.8777107117036835,0.5138057470321655
