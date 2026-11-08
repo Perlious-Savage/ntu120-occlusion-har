@@ -62,6 +62,7 @@ def test_conditions(cfg):
     conds += [('clean', f'{c}_s{s}') for c in SKELETON for s in SEVERITIES]
     dual = cfg['dual_corruptions']
     conds += [(f'{rc}_s{a}', f'{sc}_s{b}') for rc, sc in dual['pairs'] for a, b in dual['severities']]
+    conds += [(f'{rc}_s{s}', f'{sc}_s{s}') for rc, sc in cfg.get('coupled_corruptions', []) for s in SEVERITIES]
     return conds
 
 
@@ -166,6 +167,7 @@ def main():
     ap.add_argument('--train-split', choices=['val', 'train'], help='override config train_split (train = ablation)')
     ap.add_argument('--epochs', type=int, help='override config epochs')
     ap.add_argument('--aux-weight', type=float, help='override config aux_weight (0 = ablation, written to <output_dir>_noaux)')
+    ap.add_argument('--eval-only', action='store_true', help='reuse the saved checkpoint.pt (e.g. for new test conditions)')
     args = ap.parse_args()
     cfg = yaml.safe_load(open(args.config))
     cfg.update(protocol=args.protocol, method=args.method)
@@ -183,10 +185,20 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     head = None
-    if args.method != 'average':
+    if args.method != 'average' and args.eval_only:
+        ck = torch.load(run / 'checkpoint.pt', map_location=device, weights_only=False)
+        d = {k: v for k, v in ck['config'].items() if k not in ('dual_corruptions', 'coupled_corruptions')}
+        assert d == {k: v for k, v in cfg.items() if k not in ('dual_corruptions', 'coupled_corruptions')}, 'config changed since training'
+        fr, fs = Features(cfg, args.protocol, 'val').pair('clean', 'clean', args.method == 'attention')[:2]
+        head = FusionHead(args.method, fr.shape[1], fs.shape[1], cfg['latent_dim'], cfg['num_classes'], cfg['dropout']).to(device)
+        head.load_state_dict(ck['model_state_dict'])
+    elif args.method != 'average':
         head = train(cfg, args.method, Features(cfg, args.protocol, 'train'), Features(cfg, args.protocol, 'val'), device, run)
     test, rows = Features(cfg, args.protocol, 'test'), []
     for rc, sc in test_conditions(cfg):
+        if not all((test.dirs[m] / c).is_dir() for m, c in (('rgb', rc), ('skeleton', sc))):
+            print(f'{rc} + {sc}: branch outputs not computed yet, skipped', flush=True)
+            continue
         fr, fs, pr, ps, y, ids = test.pair(rc, sc, args.method == 'attention')
         if head is None:
             probs, w = (pr + ps) / 2, np.full((len(y), 2), 0.5, dtype=np.float32)

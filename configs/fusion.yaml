@@ -24,5 +24,7 @@ scheduler: {name: cosine}
 dual_corruptions:
   pairs: [[rgb_occlusion, skeleton_part_dropout], [rgb_blur, skeleton_noise], [rgb_temporal_mask, skeleton_joint_dropout]]
   severities: [[2, 2], [3, 3], [4, 4], [4, 1], [1, 4]]   # [RGB severity, skeleton severity]
+# Coupled occlusion S1-S5: one occluder hides the RGB pixels and the joints behind it (same seed).
+coupled_corruptions: [[rgb_occlusion, skeleton_coupled_occlusion]]
 
 output_dir: outputs/m3_fusion

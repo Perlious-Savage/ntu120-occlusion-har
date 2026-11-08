@@ -5,6 +5,7 @@ data/metadata/*
 !data/metadata/NTU_RGBD120_samples_with_missing_skeletons.txt
 !data/metadata/ntu120_action_names.csv
 !data/metadata/person_boxes.csv
+!data/metadata/joint_tracking.csv
 outputs/
 __pycache__/
 *.pyc

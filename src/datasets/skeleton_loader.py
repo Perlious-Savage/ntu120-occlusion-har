@@ -11,7 +11,8 @@ FATAL_ISSUES = ('parse_error', 'empty_sequence', 'no_bodies', 'nan', 'inf', 'all
 
 
 def read_skeleton_file(path):
-    """Raw parse -> (frame count from header, {body_id: {'frames', 'xyz', 'color'}}, max bodies in one frame)."""
+    """Raw parse -> (frame count from header, {body_id: {'frames', 'xyz', 'color', 'state'}}, max bodies in one frame).
+    state is the Kinect trackingState per joint: 0 not tracked, 1 inferred (not seen by the camera), 2 tracked."""
     with open(path) as f:
         lines = iter(f.read().split('\n'))
     num_frames = int(next(lines))
@@ -24,11 +25,12 @@ def read_skeleton_file(path):
             num_joints = int(next(lines))
             if num_joints != NUM_JOINTS:
                 raise ValueError(f'frame {t}: {num_joints} joints, expected {NUM_JOINTS}')
-            joints = np.array([next(lines).split()[:7] for _ in range(num_joints)], dtype=np.float32)
-            b = bodies.setdefault(body_id, {'frames': [], 'xyz': [], 'color': []})
+            joints = np.array([next(lines).split()[:12] for _ in range(num_joints)], dtype=np.float32)
+            b = bodies.setdefault(body_id, {'frames': [], 'xyz': [], 'color': [], 'state': []})
             b['frames'].append(t)
             b['xyz'].append(joints[:, 0:3])
             b['color'].append(joints[:, 5:7])
+            b['state'].append(joints[:, 11])
     return num_frames, bodies, max_per_frame
 
 
@@ -87,7 +89,8 @@ def select_actors(bodies):
 
 
 def load_skeleton(path, max_bodies=2, duplicate_single=True):
-    """-> dict with xyz (3, T, 25, 2) camera-space metres, color (2, T, 25, 2) RGB pixel coords, counts.
+    """-> dict with xyz (3, T, 25, 2) camera-space metres, color (2, T, 25, 2) RGB pixel coords,
+    state (T, 25, 2) Kinect tracking state (0 = no body in that frame), counts.
 
     Up to two actors chosen by the official NTU denoising (select_actors). Frames where an actor is not
     tracked stay zero. With duplicate_single, a sequence with a single actor repeats it in the second
@@ -97,6 +100,7 @@ def load_skeleton(path, max_bodies=2, duplicate_single=True):
     num_frames, bodies, max_per_frame = read_skeleton_file(path)
     xyz = np.zeros((3, num_frames, NUM_JOINTS, 2), np.float32)
     color = np.zeros((2, num_frames, NUM_JOINTS, 2), np.float32)
+    state = np.zeros((num_frames, NUM_JOINTS, 2), np.uint8)
     actors, noise = select_actors(bodies) if bodies else ([[], []], [])
     for m, ids in enumerate(actors):
         for k in ids:  # later bodies overwrite a shared boundary frame, as in the official code
@@ -104,10 +108,11 @@ def load_skeleton(path, max_bodies=2, duplicate_single=True):
             # select actor m first (view), then frames; [:, frames, :, m] would move the frame axis to the front
             xyz[..., m][:, b['frames']] = np.stack(b['xyz']).transpose(2, 0, 1)
             color[..., m][:, b['frames']] = np.stack(b['color']).transpose(2, 0, 1)
+            state[..., m][b['frames']] = np.stack(b['state'])
     num_actors = sum(bool(a) for a in actors)
     if duplicate_single and num_actors == 1:
-        xyz[..., 1], color[..., 1] = xyz[..., 0], color[..., 0]
-    return {'xyz': xyz, 'color': color, 'num_frames': num_frames, 'num_actors': num_actors,
+        xyz[..., 1], color[..., 1], state[..., 1] = xyz[..., 0], color[..., 0], state[..., 0]
+    return {'xyz': xyz, 'color': color, 'state': state, 'num_frames': num_frames, 'num_actors': num_actors,
             'actor_bodies': actors, 'noise_bodies': noise,
             'num_bodies_total': len(bodies), 'max_bodies_per_frame': max_per_frame}
 

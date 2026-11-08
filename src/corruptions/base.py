@@ -15,6 +15,7 @@ class Corruption:
     name = ''
     modality = ''   # 'rgb' or 'skeleton'
     levels = ()     # S1-S5 parameters, set from configs/corruptions.yaml by registry.py
+    seed_as = None  # draw the per-sample seed under another corruption's name (coupled occlusion)
 
     def apply(self, x, severity, seed, **context):
         if severity == 0:

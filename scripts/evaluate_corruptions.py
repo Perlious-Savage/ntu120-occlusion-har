@@ -27,8 +27,8 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.corruptions.base import SEVERITIES, sample_seed  # noqa: E402
-from src.corruptions.registry import RGB, SKELETON, get  # noqa: E402
-from src.corruptions.rgb_occlusion import boxes_in_clip  # noqa: E402
+from src.corruptions.registry import COUPLED, RGB, SKELETON, get  # noqa: E402
+from src.corruptions.rgb_occlusion import boxes_in_clip, to_clip  # noqa: E402
 from src.datasets.baseline_datasets import build_dataset  # noqa: E402
 from src.datasets.rgb_loader import read_selected_frames  # noqa: E402
 from src.engine import amp_dtype, classification_metrics  # noqa: E402
@@ -37,7 +37,9 @@ from src.models.baselines import build_model  # noqa: E402
 SHARD = 4096
 
 
-def condition_list(modality, clean_only):
+def condition_list(modality, clean_only, corruption=None):
+    if corruption:                                    # one extra corruption, S1-S5 only
+        return [(corruption, s) for s in SEVERITIES]
     names = RGB if modality == 'rgb' else SKELETON
     return [('clean', 0)] + ([] if clean_only else [(c, s) for c in names for s in SEVERITIES])
 
@@ -49,9 +51,10 @@ def condition_name(c, s):
 class AllConditions(torch.utils.data.Dataset):
     """Wraps the Milestone 2 eval dataset; returns (K, ...) inputs, one per condition."""
 
-    def __init__(self, base, conditions, seed, boxes=None):
-        self.base, self.conditions, self.seed, self.boxes = base, conditions, seed, boxes
-        self.rgb = boxes is not None
+    def __init__(self, base, conditions, seed, boxes=None, rgb=False, clip=None):
+        """clip: RGB input geometry {'resize_hw', 'size'} for the coupled occlusion (skeleton runs)."""
+        self.base, self.conditions, self.seed, self.boxes, self.rgb, self.clip = base, conditions, seed, boxes, rgb, clip
+        self.coupled = any(c in COUPLED for c, _ in conditions)
 
     def __len__(self):
         return len(self.base)
@@ -67,7 +70,10 @@ class AllConditions(torch.utils.data.Dataset):
             ctx = {'boxes': boxes_in_clip(self.boxes.loc[sid], b.resize_hw, b.size)}
         else:
             x, ctx = self.base[i][0].numpy(), {}
-        out = np.stack([get(c).apply(x, s, sample_seed(sid, c, s, self.seed), **ctx) if s else x
+            if self.coupled:                          # the RGB occluder of this sample, and where its joints are
+                ctx = {'boxes': boxes_in_clip(self.boxes.loc[sid], **self.clip), 'size': self.clip['size'],
+                       'color': np.stack(to_clip(*self.base.eval_color(i), **self.clip))}
+        out = np.stack([get(c).apply(x, s, sample_seed(sid, get(c).seed_as or c, s, self.seed), **ctx) if s else x
                         for c, s in self.conditions])
         return torch.from_numpy(out), label, sid
 
@@ -98,6 +104,7 @@ def main():
     ap.add_argument('--run', required=True, type=Path)
     ap.add_argument('--split', default='test', help='test, val or train (the run config split) or a split CSV')
     ap.add_argument('--clean-only', action='store_true', help='only the clean condition (e.g. train/val features)')
+    ap.add_argument('--corruption', choices=COUPLED, help='evaluate only this extra corruption (S1-S5), kept apart from the main shards')
     ap.add_argument('--out', type=Path)
     ap.add_argument('--batch-size', type=int, help='samples per batch (each holds 16 conditions)')
     ap.add_argument('--workers', type=int)
@@ -105,8 +112,9 @@ def main():
     cfg = yaml.safe_load(open(args.run / 'config.yaml'))
     rgb = cfg['model']['name'] == 'r3d18'
     out = args.out or Path('outputs/m3_robustness') / args.run.name / Path(args.split).stem
-    (out / 'shards').mkdir(parents=True, exist_ok=True)
-    conditions = condition_list('rgb' if rgb else 'skeleton', args.clean_only)
+    shard_dir = out / ('shards' + (f'_{args.corruption}' if args.corruption else ''))
+    shard_dir.mkdir(parents=True, exist_ok=True)
+    conditions = condition_list('rgb' if rgb else 'skeleton', args.clean_only, args.corruption)
     k = len(conditions)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -118,15 +126,17 @@ def main():
 
     split_csv = args.split if args.split.endswith('.csv') else cfg['splits'][args.split]
     base = build_dataset(cfg, split_csv, train=False)
-    boxes = pd.read_csv(Path(cfg['data_root']) / 'metadata/person_boxes.csv').set_index('sample_id') if rgb else None
-    ds = AllConditions(base, conditions, cfg['seed'], boxes)
+    boxes = pd.read_csv(Path(cfg['data_root']) / 'metadata/person_boxes.csv').set_index('sample_id')
+    data_cfg = yaml.safe_load(open(Path(__file__).resolve().parents[1] / 'configs/data.yaml'))
+    clip = {'resize_hw': tuple(data_cfg['rgb_resize_hw']), 'size': data_cfg['rgb_size']}
+    ds = AllConditions(base, conditions, cfg['seed'], boxes, rgb, clip)
     bs = args.batch_size or max(1, (128 if rgb else 1024) // k)
     workers = cfg['num_workers'] if args.workers is None else args.workers
     shards = range(0, len(ds), SHARD)
     print(f'{args.run.name} {args.split}: {len(ds)} samples x {k} conditions, checkpoint epoch {ck["epoch"]}, '
           f'{len(shards)} shards of {SHARD}', flush=True)
     for j, start in enumerate(shards):
-        path = out / 'shards' / f'{j:03d}.npz'
+        path = shard_dir / f'{j:03d}.npz'
         if path.exists():
             continue
         sub = torch.utils.data.Subset(ds, range(start, min(start + SHARD, len(ds))))
@@ -136,7 +146,7 @@ def main():
         Path(str(path) + '.tmp.npz').rename(path)                         # a reclaimed session never leaves a half shard
         print(f'shard {j + 1}/{len(shards)} done, clean top-1 {(p[:, 0].argmax(1) == y).mean():.4f}', flush=True)
 
-    parts = [np.load(out / 'shards' / f'{j:03d}.npz') for j in range(len(shards))]
+    parts = [np.load(shard_dir / f'{j:03d}.npz') for j in range(len(shards))]
     probs = np.concatenate([q['probs'] for q in parts]); feats = np.concatenate([q['feats'] for q in parts])
     labels = np.concatenate([q['labels'] for q in parts]); ids = np.concatenate([q['ids'] for q in parts])
     assert list(ids) == list(base.df.sample_id), 'shards out of order'
@@ -159,8 +169,9 @@ def main():
         json.dump(m, open(d / 'metrics.json', 'w'), indent=2)
         rows.append(m)
     df = pd.DataFrame(rows)
-    df['robustness_ratio'] = df.top1_accuracy / df.top1_accuracy.iloc[0]
-    df.to_csv(out / 'summary.csv', index=False)
+    clean = json.load(open(out / 'clean/metrics.json'))['top1_accuracy']
+    df['robustness_ratio'] = df.top1_accuracy / clean
+    df.to_csv(out / (f'summary_{args.corruption}.csv' if args.corruption else 'summary.csv'), index=False)
     print(df[['corruption', 'severity', 'top1_accuracy', 'top5_accuracy', 'macro_f1', 'robustness_ratio']]
           .to_string(index=False, float_format='%.4f'))
     print(f'-> {out}')

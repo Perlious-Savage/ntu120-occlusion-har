@@ -3,6 +3,7 @@ from pathlib import Path
 
 import yaml
 
+from .coupled_occlusion import SkeletonCoupledOcclusion
 from .rgb_blur import RGBBlur
 from .rgb_occlusion import RGBOcclusion
 from .rgb_temporal_mask import RGBTemporalMask
@@ -14,13 +15,15 @@ CONFIG = Path(__file__).resolve().parents[2] / 'configs/corruptions.yaml'
 _cfg = yaml.safe_load(open(CONFIG))
 
 CORRUPTIONS = {}
-for cls in (RGBOcclusion, RGBBlur, RGBTemporalMask, SkeletonJointDropout, SkeletonPartDropout, SkeletonNoise):
+for cls in (RGBOcclusion, RGBBlur, RGBTemporalMask, SkeletonJointDropout, SkeletonPartDropout, SkeletonNoise,
+            SkeletonCoupledOcclusion):
     c = cls()
     c.levels = tuple(_cfg[c.name]['levels'])
     assert len(c.levels) == 5, f'{c.name}: need 5 levels (S1-S5)'
     CORRUPTIONS[c.name] = c
 RGB = [n for n, c in CORRUPTIONS.items() if c.modality == 'rgb']
-SKELETON = [n for n, c in CORRUPTIONS.items() if c.modality == 'skeleton']
+SKELETON = [n for n, c in CORRUPTIONS.items() if c.modality == 'skeleton' and not c.seed_as]
+COUPLED = [n for n, c in CORRUPTIONS.items() if c.seed_as]   # evaluated separately (--corruption)
 
 
 def get(name):

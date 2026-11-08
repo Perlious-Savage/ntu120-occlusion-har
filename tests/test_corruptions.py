@@ -15,6 +15,8 @@ CLIP = rng.integers(1, 256, size=(16, 112, 112, 3), dtype=np.uint8)   # no pixel
 SKEL = rng.normal(0, 0.5, size=(3, 64, 25, 2)).astype(np.float32)     # two distinct persons, all tracked
 SKEL_SINGLE = np.repeat(SKEL[..., :1], 2, axis=-1)                    # one actor copied to slot 2
 BOX = (20.0, 10.0, 90.0, 110.0)
+COLOR = rng.uniform(0, 112, size=(2, 64, 25, 2))                     # joint positions in clip pixels
+CTX = {'boxes': [BOX], 'color': COLOR}
 
 
 def inp(name):
@@ -26,7 +28,7 @@ def test_identity_and_determinism():
         x = inp(name)
         assert c.apply(x, 0, 1) is x
         for s in range(1, 6):
-            a, b = c.apply(x, s, 123, boxes=[BOX]), c.apply(x, s, 123, boxes=[BOX])
+            a, b = c.apply(x, s, 123, **CTX), c.apply(x, s, 123, **CTX)
             assert np.array_equal(a, b), f'{name} S{s} not deterministic'
             assert not np.array_equal(a, x), f'{name} S{s} changed nothing'
             assert a.shape == x.shape and a.dtype == x.dtype
@@ -53,6 +55,15 @@ def test_occlusion_one_rectangle_per_person():
     assert not black[:, 40:70].any()                                      # nothing between them
 
 
+def test_coupled_occlusion_hides_the_joints_behind_the_rgb_occluder():
+    for s in range(1, 6):
+        seed = sample_seed('S001C001P001R001A001', 'rgb_occlusion', s)
+        black = (get('rgb_occlusion').apply(CLIP, s, seed, boxes=[BOX])[0] == 0).all(-1)
+        out = get('skeleton_coupled_occlusion').apply(SKEL, s, seed, **CTX)
+        behind = black[COLOR[1].astype(int), COLOR[0].astype(int)]          # (T, V, M) joint pixel is black
+        assert behind.any() and np.array_equal(~out.any(axis=0), behind), s
+
+
 def test_skeleton_schedules():
     drop = [1 - get('skeleton_joint_dropout').apply(SKEL, s, 7)[..., 0].any(axis=0).mean() for s in range(1, 6)]
     for got, want in zip(drop, (0.05, 0.10, 0.20, 0.30, 0.40)):
@@ -69,9 +80,9 @@ def test_skeleton_schedules():
 
 def test_single_actor_copy_stays_a_copy():
     for name in SKELETON:
-        out = get(name).apply(SKEL_SINGLE, 3, 9)
+        out = get(name).apply(SKEL_SINGLE, 3, 9, **CTX)
         assert np.array_equal(out[..., 0], out[..., 1]), name
-        two = get(name).apply(SKEL, 3, 9)
+        two = get(name).apply(SKEL, 3, 9, **CTX)
         if name != 'skeleton_part_dropout':                        # parts: same joints for everyone by design
             d0, d1 = two[..., 0] - SKEL[..., 0], two[..., 1] - SKEL[..., 1]
             assert not np.allclose(d0, d1), name                   # two real people: independent corruption

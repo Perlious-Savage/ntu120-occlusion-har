@@ -15,18 +15,31 @@ class RGBOcclusion(Corruption):
     modality = 'rgb'
 
     def _apply(self, x, frac, rng, boxes=None, **_):
-        _, h, w, _ = x.shape
-        boxes = [b for b in (boxes or []) if np.all(np.isfinite(b))] or [(w / 4, h / 4, 3 * w / 4, 3 * h / 4)]
-        for box in boxes:
-            x0, y0, x1, y1 = (float(np.clip(v, 0, lim)) for v, lim in zip(box, (w, h, w, h)))
-            bw, bh = max(x1 - x0, 2.0), max(y1 - y0, 2.0)
-            aspect = np.exp(rng.uniform(np.log(0.5), np.log(2.0)))
-            ow = min(bw, np.sqrt(frac * bw * bh * aspect))
-            oh = min(bh, frac * bw * bh / ow)
-            ox = x0 + rng.uniform(0, bw - ow)
-            oy = y0 + rng.uniform(0, bh - oh)
-            x[:, int(round(oy)):int(round(oy + oh)), int(round(ox)):int(round(ox + ow))] = 0
+        for r0, r1, c0, c1 in occluders(boxes, frac, rng, *x.shape[1:3]):
+            x[:, r0:r1, c0:c1] = 0
         return x
+
+
+def occluders(boxes, frac, rng, h, w):
+    """One rectangle per valid box covering `frac` of it -> [(row0, row1, col0, col1)] clip pixels.
+    Shared with the coupled occlusion, so the same seed hides the same pixels and joints."""
+    boxes = [b for b in (boxes or []) if np.all(np.isfinite(b))] or [(w / 4, h / 4, 3 * w / 4, 3 * h / 4)]
+    rects = []
+    for box in boxes:
+        x0, y0, x1, y1 = (float(np.clip(v, 0, lim)) for v, lim in zip(box, (w, h, w, h)))
+        bw, bh = max(x1 - x0, 2.0), max(y1 - y0, 2.0)
+        aspect = np.exp(rng.uniform(np.log(0.5), np.log(2.0)))
+        ow = min(bw, np.sqrt(frac * bw * bh * aspect))
+        oh = min(bh, frac * bw * bh / ow)
+        ox = x0 + rng.uniform(0, bw - ow)
+        oy = y0 + rng.uniform(0, bh - oh)
+        rects.append((int(round(oy)), int(round(oy + oh)), int(round(ox)), int(round(ox + ow))))
+    return rects
+
+
+def to_clip(u, v, resize_hw=(128, 171), size=112):
+    """1920 x 1080 colour-camera pixel coordinates -> model-input clip pixels (resize, then centre crop)."""
+    return u * resize_hw[1] / 1920 - (resize_hw[1] - size) // 2, v * resize_hw[0] / 1080 - (resize_hw[0] - size) // 2
 
 
 def boxes_in_clip(row, resize_hw=(128, 171), size=112):

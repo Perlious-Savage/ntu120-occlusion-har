@@ -56,12 +56,14 @@ class SkeletonClips(torch.utils.data.Dataset):
         index = pd.read_csv(self.root / 'processed/skeleton_index.csv').set_index('sample_id')
         self.index = index.loc[self.df.sample_id]  # raises if a split sample is missing from the cache
         self.max_bodies = int(index.max_bodies.iloc[0])
-        self.cache = None  # opened lazily so every DataLoader worker gets its own memmap
+        self.cache = self.color_cache = None  # opened lazily so every DataLoader worker gets its own memmap
 
     def __len__(self):
         return len(self.df)
 
-    def load(self, i):
+    def load(self, i, color=False):
+        """color=True also returns the joints' colour-camera pixel positions (2, T', 25, M) for the same
+        frames, from processed/skeleton_color_f16.bin (scripts/joint_visibility.py --cache)."""
         if self.cache is None:
             self.cache = np.memmap(self.root / 'processed/skeleton_xyz_f16.bin', dtype=np.float16, mode='r')
         r = self.index.iloc[i]
@@ -71,8 +73,19 @@ class SkeletonClips(torch.utils.data.Dataset):
         first = np.flatnonzero(tracked[0, :, :, 0].any(axis=1))   # frames where body 0 is tracked
         if len(first):
             x = np.where(tracked, x - x[:, first[0], 1, 0][:, None, None, None], 0).astype(np.float32)
-        valid = x.any(axis=(0, 2, 3))
-        return x[:, valid]  # drop frames without anybody, as the official preprocessing does
+        valid = x.any(axis=(0, 2, 3))   # drop frames without anybody, as the official preprocessing does
+        if not color:
+            return x[:, valid]
+        if self.color_cache is None:
+            self.color_cache = np.memmap(self.root / 'processed/skeleton_color_f16.bin', dtype=np.float16, mode='r')
+        o = r.offset // 3 * 2                                     # 2 channels instead of 3, same order
+        c = np.asarray(self.color_cache[o:o + n // 3 * 2], dtype=np.float32).reshape(2, r.num_frames, 25, self.max_bodies)
+        return x[:, valid], c[:, valid]
+
+    def eval_color(self, i):
+        """Joint pixel positions resampled exactly like the eval input (central crop, resize to window)."""
+        _, c = self.load(i, color=True)
+        return np.asarray(valid_crop_resize(c, c.shape[1], self.p_interval, self.window))
 
     def __getitem__(self, i):
         x = self.load(i)
