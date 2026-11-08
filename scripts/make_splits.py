@@ -1,4 +1,5 @@
 """Create official X-Sub / X-Set train/test splits and internal train/val splits.
+X-Sub validation holds out whole subjects, X-Set validation whole performances (all cameras of one take).
 
 A sample is usable when both RGB and skeleton exist, it is not on NTU's official missing-skeleton
 list, and check_skeletons.py found no fatal problem. The same usable set is used for every
@@ -50,13 +51,17 @@ def subject_aware_val(train, frac, seed, tries=10000, tolerance=0.05, balance=0.
     return best[1]
 
 
-def stratified_val(train, frac, seed):
-    if train.label.value_counts().min() < 2:  # stratification impossible (tiny local subsets)
-        print('  WARNING: some class has <2 samples; falling back to unstratified split')
-        _, val_idx = train_test_split(train.index, test_size=frac, random_state=seed)
-    else:
-        _, val_idx = train_test_split(train.index, test_size=frac, random_state=seed, stratify=train.label)
-    return train.index.isin(val_idx)
+def performance_val(train, frac, seed):
+    """X-Set: hold out whole performances (setup, subject, replication, action). The three cameras film each
+    performance at the same time, so splitting single clips would put another view of the same performance
+    in internal training. Performances are drawn stratified by class (each has one class)."""
+    perf = train[['setup_id', 'subject_id', 'replication_id', 'action_id']].astype(str).agg('-'.join, axis=1)
+    label = train.groupby(perf).label.first()
+    strat = label if label.value_counts().min() >= 2 else None  # tiny local subsets cannot be stratified
+    if strat is None:
+        print('  WARNING: some class has <2 performances; falling back to unstratified split')
+    _, val_perf = train_test_split(label.index.to_numpy(object), test_size=frac, random_state=seed, stratify=strat)
+    return perf.isin(set(val_perf)).to_numpy()
 
 
 def save(df, path):
@@ -96,7 +101,7 @@ def main():
             val, val_subjects, used_seed = subject_aware_val(train, frac, seed)
             print(f'  validation subjects (seed {used_seed}): {val_subjects}')
         else:
-            val = stratified_val(train, frac, seed)
+            val = performance_val(train, frac, seed)
         save(train[~val], out / f'{proto}_train_internal.csv')
         save(train[val], out / f'{proto}_val.csv')
         assert not set(train.sample_id[val]) & set(train.sample_id[~val])
