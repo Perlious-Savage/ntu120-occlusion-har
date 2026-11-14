@@ -29,7 +29,7 @@ from train_fusion import Features, cv_folds, fit, infer  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.corruptions.base import SEVERITIES  # noqa: E402
 from src.corruptions.registry import RGB, SKELETON  # noqa: E402
-from src.models.fusion import FusionHead  # noqa: E402
+from src.models.fusion import FusionHead, load_head  # noqa: E402
 
 SETTINGS = {'val_aux': 'outputs/m3_fusion', 'val_noaux': 'outputs/m3_fusion_noaux', 'trainfeat': 'outputs/m3_fusion_trainfeat'}
 OUT = Path('results/milestone3')
@@ -63,7 +63,7 @@ def main():
                     ck = torch.load(run / 'checkpoint.pt', map_location=device, weights_only=False)
                     fr, fs = data[CONDS[0]][:2]
                     head = FusionHead(method, fr.shape[1], fs.shape[1], cfg['latent_dim'], cfg['num_classes'], cfg['dropout']).to(device)
-                    head.load_state_dict(ck['model_state_dict'])
+                    load_head(head, ck['model_state_dict'])
                     acc = {c: float((infer(head, v[0], v[1], device)[0].argmax(1) == v[4]).mean()) for c, v in data.items()}
                 else:                              # out of fold, same folds and stopping epoch as training
                     epoch = int(pd.read_csv(run / 'cv_accuracy.csv')['mean'].idxmax())

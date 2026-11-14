@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.corruptions.base import SEVERITIES  # noqa: E402
 from src.corruptions.registry import RGB, SKELETON, get  # noqa: E402
 from src.engine import classification_metrics, seed_everything  # noqa: E402
-from src.models.fusion import FusionHead  # noqa: E402
+from src.models.fusion import FusionHead, load_head  # noqa: E402
 
 METHODS = ('average', 'concat', 'global', 'attention')
 EXTRA_KEYS = ('dual_corruptions', 'coupled_corruptions', 'control_corruptions')   # test-only; ignored by --eval-only checks
@@ -199,7 +199,7 @@ def main():
         assert all(ck['config'][k] == cfg[k] for k in common), 'config changed since training'
         fr, fs = Features(cfg, args.protocol, 'val').pair('clean', 'clean', args.method == 'attention')[:2]
         head = FusionHead(args.method, fr.shape[1], fs.shape[1], cfg['latent_dim'], cfg['num_classes'], cfg['dropout']).to(device)
-        head.load_state_dict(ck['model_state_dict'])
+        load_head(head, ck['model_state_dict'])
     elif args.method != 'average':
         head = train(cfg, args.method, Features(cfg, args.protocol, 'train'), Features(cfg, args.protocol, 'val'), device, run)
     test, rows = Features(cfg, args.protocol, 'test'), []

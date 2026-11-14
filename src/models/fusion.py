@@ -60,3 +60,10 @@ class FusionHead(nn.Module):
             w = torch.cat([torch.sigmoid(self.alpha), 1 - torch.sigmoid(self.alpha)]).expand(len(h_rgb), 2)
             logits = self.cls(w[:, :1] * h_rgb + w[:, 1:] * h_sk)
         return (logits, w, (self.aux_rgb(h_rgb), self.aux_sk(h_sk))) if aux else (logits, w)
+
+
+def load_head(head, state):
+    """Load saved weights; heads trained before the auxiliary branch classifiers existed lack only those."""
+    missing, unexpected = head.load_state_dict(state, strict=False)
+    assert not unexpected and all(k.startswith(('aux_rgb.', 'aux_sk.')) for k in missing), (missing, unexpected)
+    return head
