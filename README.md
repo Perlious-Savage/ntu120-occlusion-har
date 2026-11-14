@@ -90,9 +90,13 @@ one session: `--restore` (unpacks all tars), unzip the two skeleton zips into `d
 | Model | Protocol | Top-1 Acc. | Top-5 Acc. | Macro-F1 | Best Epoch (0-based) |
 |---|---|---|---|---|---|
 | R3D-18 | X-Sub | 85.75% | 98.02% | 0.8669 | 26 |
-| R3D-18 | X-Set | 87.52% | 98.39% | 0.8735 | 26 |
+| R3D-18 | X-Set | 87.17% | 98.37% | 0.8703 | 25 |
 | CTR-GCN (joint) | X-Sub | 83.54% | 96.79% | 0.8380 | 58 |
-| CTR-GCN (joint) | X-Set | 86.23% | 97.09% | 0.8620 | 64 |
+| CTR-GCN (joint) | X-Set | 84.93% | 97.02% | 0.8507 | 63 |
+
+X-Set rows: retrained on the performance-grouped validation split (review item A2: the earlier
+class-stratified split put other camera views of the same take into internal training; the
+earlier runs, 87.52% / 86.23%, are kept on Drive as `*_m2split`). The X-Set test split is unchanged.
 
 Measured per-class differences (`results/milestone2/baseline_results.md`, `class_comparison_*.csv`):
 RGB is clearly better (>= 10 points) on object- and appearance-defined actions (typing on a keyboard,
@@ -147,8 +151,11 @@ reclaimed Colab session continues where it stopped. On an A100, the RGB test ben
 20-25 minutes per protocol and the skeleton benchmark about 10 minutes.
 
 **Fusion training data and design.** Both frozen backbones fit their own training data almost
-perfectly (R3D-18 99.98%, CTR-GCN 99.6-99.9%). Each baseline is reported in its strongest setting;
-all settings are compared in `results/milestone3/fusion_ablation.csv`.
+perfectly (R3D-18 99.98%, CTR-GCN 99.6-99.9%). **Correction (review item A1):** the training setting
+of each head below was picked after comparing test mCA across settings, so these numbers are a
+test-selected upper bound, not a clean protocol. The pre-declared setting (validation split + aux
+loss for all heads) gives lower concat/global numbers (X-Sub clean 88.2%, mCA 81.9%). Selection is
+being moved onto a corrupted validation set; until then treat `fusion_ablation.csv` as the record.
 
 | Head | Trained on | Why |
 |---|---|---|
@@ -163,7 +170,8 @@ on validation data only.
 
 **Cross-validation folds.** The folds are class-stratified. Subject-grouped folds fail for X-Sub:
 NTU-120 ties actions to subject groups, so a held-out fold can contain classes that are missing from
-its training part. The test set is never used for any choice.
+its training part. The CV folds and stopping epochs use validation data only; the choice of
+training setting per head did use test results (see the correction above).
 
 ## Decisions (documented per the milestone rules)
 
