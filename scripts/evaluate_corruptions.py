@@ -54,7 +54,7 @@ class AllConditions(torch.utils.data.Dataset):
     def __init__(self, base, conditions, seed, boxes=None, rgb=False, clip=None):
         """clip: RGB input geometry {'resize_hw', 'size'} for the coupled occlusion (skeleton runs)."""
         self.base, self.conditions, self.seed, self.boxes, self.rgb, self.clip = base, conditions, seed, boxes, rgb, clip
-        self.coupled = any(get(c).needs_color for c, _ in conditions)
+        self.coupled = any(s and get(c).needs_color for c, s in conditions)   # s = 0 is the clean condition
 
     def __len__(self):
         return len(self.base)
