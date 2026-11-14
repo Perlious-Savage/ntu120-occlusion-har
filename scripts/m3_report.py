@@ -39,7 +39,8 @@ COLOR = dict(zip(METHODS, ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4'
 MARKER = dict(zip(METHODS, ['o', 's', '^', 'D', 'v', 'P']))
 NICE = {'rgb_occlusion': 'RGB occlusion', 'rgb_blur': 'RGB blur', 'rgb_temporal_mask': 'RGB temporal mask',
         'skeleton_joint_dropout': 'Joint dropout', 'skeleton_part_dropout': 'Body-part dropout',
-        'skeleton_noise': 'Coordinate noise'}
+        'skeleton_noise': 'Coordinate noise', 'skeleton_coupled_occlusion': 'Coupled occlusion (joints behind the box)',
+        'rgb_temporal_freeze': 'RGB freeze (control)', 'skeleton_joint_interp': 'Joint dropout, interpolated (control)'}
 DOMINANCE_PTS = 5.0   # |RGB - skeleton| class accuracy gap (percentage points) for "dominant"; ~2 s.e. of a difference
 
 
@@ -278,7 +279,8 @@ def main():
                 elif m == 'skeleton_only':
                     w[m] = [acc(df, p, m, sc=sc, ss=ss) for sc, ss in zip(w.skeleton_corruption, w.skeleton_severity)]
                 w[m] = w[m].map(pct) if m in w else ''
-            md += ['### Dual corruption (3.10)', '', 'Both modalities corrupted independently.', '',
+            md += ['### Dual corruption (3.10) and coupled occlusion', '', 'Both modalities corrupted: independently, '
+                   'or by one occluder that hides the RGB pixels and the joints behind it (coupled).', '',
                    md_table(w, ['condition'] + METHODS, ['Condition'] + [LABEL[m] for m in METHODS]), '']
         c = cls[p]
         md += [f'### Class-level modality analysis (3.12)', '',
