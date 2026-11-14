@@ -50,8 +50,10 @@ def main():
         for setting, d in SETTINGS.items():
             for method in ('average', 'concat', 'global', 'attention'):
                 run = Path(d) / f'{method}_{p}_seed42'
-                if not (run / 'config.yaml').exists():
-                    continue
+                if not ((run / 'config.yaml').exists() and (run / 'summary.csv').exists()):
+                    continue                    # never trained/evaluated in this setting
+                if method == 'average' and setting != 'val_aux':
+                    continue                    # no training: identical in every setting
                 cfg = yaml.safe_load(open(run / 'config.yaml'))
                 val = Features(cfg, p, 'val_corrupted')
                 lp = method == 'attention'
