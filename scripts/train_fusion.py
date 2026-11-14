@@ -193,8 +193,10 @@ def main():
     head = None
     if args.method != 'average' and args.eval_only:
         ck = torch.load(run / 'checkpoint.pt', map_location=device, weights_only=False)
-        d = {k: v for k, v in ck['config'].items() if k not in EXTRA_KEYS}
-        assert d == {k: v for k, v in cfg.items() if k not in EXTRA_KEYS}, 'config changed since training'
+        # keys both configs have must match; heads trained before a key existed (train_split, cv_folds,
+        # aux_weight were added later; the old default was training features without aux loss) lack it
+        common = (ck['config'].keys() & cfg.keys()) - set(EXTRA_KEYS)
+        assert all(ck['config'][k] == cfg[k] for k in common), 'config changed since training'
         fr, fs = Features(cfg, args.protocol, 'val').pair('clean', 'clean', args.method == 'attention')[:2]
         head = FusionHead(args.method, fr.shape[1], fs.shape[1], cfg['latent_dim'], cfg['num_classes'], cfg['dropout']).to(device)
         head.load_state_dict(ck['model_state_dict'])

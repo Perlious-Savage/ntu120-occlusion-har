@@ -59,7 +59,7 @@ def main():
                 y = data[CONDS[0]][4]
                 if method == 'average':
                     acc = {c: float(((v[2] + v[3]).argmax(1) == v[4]).mean()) for c, v in data.items()}
-                elif cfg['train_split'] == 'train':
+                elif cfg.get('train_split', 'train') == 'train':     # old configs: training features, no aux
                     ck = torch.load(run / 'checkpoint.pt', map_location=device, weights_only=False)
                     fr, fs = data[CONDS[0]][:2]
                     head = FusionHead(method, fr.shape[1], fs.shape[1], cfg['latent_dim'], cfg['num_classes'], cfg['dropout']).to(device)
