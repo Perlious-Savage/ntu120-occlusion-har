@@ -27,7 +27,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.corruptions.base import SEVERITIES, sample_seed  # noqa: E402
-from src.corruptions.registry import COUPLED, RGB, SKELETON, get  # noqa: E402
+from src.corruptions.registry import EXTRA, RGB, SKELETON, get  # noqa: E402
 from src.corruptions.rgb_occlusion import boxes_in_clip, to_clip  # noqa: E402
 from src.datasets.baseline_datasets import build_dataset  # noqa: E402
 from src.datasets.rgb_loader import read_selected_frames  # noqa: E402
@@ -54,7 +54,7 @@ class AllConditions(torch.utils.data.Dataset):
     def __init__(self, base, conditions, seed, boxes=None, rgb=False, clip=None):
         """clip: RGB input geometry {'resize_hw', 'size'} for the coupled occlusion (skeleton runs)."""
         self.base, self.conditions, self.seed, self.boxes, self.rgb, self.clip = base, conditions, seed, boxes, rgb, clip
-        self.coupled = any(c in COUPLED for c, _ in conditions)
+        self.coupled = any(get(c).needs_color for c, _ in conditions)
 
     def __len__(self):
         return len(self.base)
@@ -104,7 +104,7 @@ def main():
     ap.add_argument('--run', required=True, type=Path)
     ap.add_argument('--split', default='test', help='test, val or train (the run config split) or a split CSV')
     ap.add_argument('--clean-only', action='store_true', help='only the clean condition (e.g. train/val features)')
-    ap.add_argument('--corruption', choices=COUPLED, help='evaluate only this extra corruption (S1-S5), kept apart from the main shards')
+    ap.add_argument('--corruption', choices=EXTRA, help="evaluate only this extra corruption (coupled occlusion or an A5 control; S1-S5), kept apart from the main shards")
     ap.add_argument('--out', type=Path)
     ap.add_argument('--batch-size', type=int, help='samples per batch (each holds 16 conditions)')
     ap.add_argument('--workers', type=int)

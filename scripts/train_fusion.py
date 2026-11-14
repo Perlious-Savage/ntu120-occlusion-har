@@ -26,11 +26,12 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.corruptions.base import SEVERITIES  # noqa: E402
-from src.corruptions.registry import RGB, SKELETON  # noqa: E402
+from src.corruptions.registry import RGB, SKELETON, get  # noqa: E402
 from src.engine import classification_metrics, seed_everything  # noqa: E402
 from src.models.fusion import FusionHead  # noqa: E402
 
 METHODS = ('average', 'concat', 'global', 'attention')
+EXTRA_KEYS = ('dual_corruptions', 'coupled_corruptions', 'control_corruptions')   # test-only; ignored by --eval-only checks
 
 
 class Features:
@@ -63,6 +64,8 @@ def test_conditions(cfg):
     dual = cfg['dual_corruptions']
     conds += [(f'{rc}_s{a}', f'{sc}_s{b}') for rc, sc in dual['pairs'] for a, b in dual['severities']]
     conds += [(f'{rc}_s{s}', f'{sc}_s{s}') for rc, sc in cfg.get('coupled_corruptions', []) for s in SEVERITIES]
+    for c in cfg.get('control_corruptions', []):          # A5 controls: one modality corrupted, the other clean
+        conds += [(f'{c}_s{s}', 'clean') if get(c).modality == 'rgb' else ('clean', f'{c}_s{s}') for s in SEVERITIES]
     return conds
 
 
@@ -187,8 +190,8 @@ def main():
     head = None
     if args.method != 'average' and args.eval_only:
         ck = torch.load(run / 'checkpoint.pt', map_location=device, weights_only=False)
-        d = {k: v for k, v in ck['config'].items() if k not in ('dual_corruptions', 'coupled_corruptions')}
-        assert d == {k: v for k, v in cfg.items() if k not in ('dual_corruptions', 'coupled_corruptions')}, 'config changed since training'
+        d = {k: v for k, v in ck['config'].items() if k not in EXTRA_KEYS}
+        assert d == {k: v for k, v in cfg.items() if k not in EXTRA_KEYS}, 'config changed since training'
         fr, fs = Features(cfg, args.protocol, 'val').pair('clean', 'clean', args.method == 'attention')[:2]
         head = FusionHead(args.method, fr.shape[1], fs.shape[1], cfg['latent_dim'], cfg['num_classes'], cfg['dropout']).to(device)
         head.load_state_dict(ck['model_state_dict'])

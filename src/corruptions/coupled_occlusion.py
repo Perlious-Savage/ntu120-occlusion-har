@@ -15,6 +15,8 @@ class SkeletonCoupledOcclusion(Corruption):
     name = 'skeleton_coupled_occlusion'
     modality = 'skeleton'
     seed_as = 'rgb_occlusion'
+    extra = True
+    needs_color = True
 
     def _apply(self, x, frac, rng, boxes=None, color=None, size=112, **_):
         u, v = color

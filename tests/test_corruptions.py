@@ -20,7 +20,7 @@ CTX = {'boxes': [BOX], 'color': COLOR}
 
 
 def inp(name):
-    return CLIP if name in RGB else SKEL
+    return CLIP if get(name).modality == 'rgb' else SKEL
 
 
 def test_identity_and_determinism():
@@ -76,6 +76,29 @@ def test_skeleton_schedules():
     assert all(a < b for a, b in zip(noise, noise[1:])), noise
     zeros = SKEL.copy(); zeros[:, :10] = 0                          # untracked frames stay untracked
     assert not get('skeleton_noise').apply(zeros, 5, 7)[:, :10].any()
+
+
+def test_controls_hit_the_same_frames_and_joints_without_sentinels():
+    for s in range(1, 6):
+        seed = sample_seed('S001C001P001R001A001', 'rgb_temporal_mask', s)
+        black = (get('rgb_temporal_mask').apply(CLIP, s, seed) == 0).all(axis=(1, 2, 3))
+        frz = get('rgb_temporal_freeze').apply(CLIP, s, seed)
+        changed = (frz != CLIP).any(axis=(1, 2, 3))
+        assert np.array_equal(changed, black), s                       # exactly the masked frames
+        a = int(np.flatnonzero(black)[0])
+        src = CLIP[a - 1] if a else CLIP[np.flatnonzero(black)[-1] + 1]
+        assert all(np.array_equal(f, src) for f in frz[black]) and (frz != 0).any(axis=-1).all()
+        seed = sample_seed('S001C001P001R001A001', 'skeleton_joint_dropout', s)
+        gone = ~get('skeleton_joint_dropout').apply(SKEL, s, seed).any(axis=0)
+        ramp = np.broadcast_to(np.linspace(-1, 1, 64)[None, :, None, None], SKEL.shape).astype(np.float32) + 2
+        gone_r = ~get('skeleton_joint_dropout').apply(ramp, s, seed).any(axis=0)
+        itp = get('skeleton_joint_interp').apply(ramp, s, seed)
+        assert gone.any() and itp.all()                                # no zeros left
+        kept, t = ~gone_r, np.arange(64)[:, None, None]
+        first = np.where(kept.any(0), kept.argmax(0), 64)
+        last = np.where(kept.any(0), 63 - kept[::-1].argmax(0), -1)
+        inner = gone_r & (t > first) & (t < last)                       # ends are held flat, not extrapolated
+        assert np.allclose(itp[:, inner], ramp[:, inner], atol=1e-5), s  # a linear trajectory is recovered
 
 
 def test_single_actor_copy_stays_a_copy():

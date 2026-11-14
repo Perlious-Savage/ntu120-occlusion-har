@@ -15,7 +15,9 @@ class Corruption:
     name = ''
     modality = ''   # 'rgb' or 'skeleton'
     levels = ()     # S1-S5 parameters, set from configs/corruptions.yaml by registry.py
-    seed_as = None  # draw the per-sample seed under another corruption's name (coupled occlusion)
+    seed_as = None  # draw the per-sample seed under another corruption's name (coupled occlusion, controls)
+    extra = False   # evaluated separately (evaluate_corruptions.py --corruption), not in the main benchmark
+    needs_color = False  # needs the joints' colour-camera positions as context (coupled occlusion)
 
     def apply(self, x, severity, seed, **context):
         if severity == 0:

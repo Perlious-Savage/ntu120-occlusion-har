@@ -28,3 +28,6 @@ dual_corruptions:
 coupled_corruptions: [[rgb_occlusion, skeleton_coupled_occlusion]]
 
 output_dir: outputs/m3_fusion
+# Information-matched controls (review item A5): same frames / joints as the temporal mask and joint
+# dropout, without black frames or zeroed joints. Evaluated with the other modality clean.
+control_corruptions: [rgb_temporal_freeze, skeleton_joint_interp]

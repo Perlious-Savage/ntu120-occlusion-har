@@ -7,12 +7,17 @@ rgb_occlusion:          # fraction of each person's bounding box covered by one 
 rgb_blur:               # Gaussian kernel size in px at 112 x 112 model input
   levels: [3, 5, 7, 11, 15]
 rgb_temporal_mask:      # fraction of the 16 input frames blacked out in one contiguous block
-  levels: [0.10, 0.20, 0.30, 0.40, 0.50]
+  levels: &tmask [0.10, 0.20, 0.30, 0.40, 0.50]
 skeleton_joint_dropout: # fraction of each person's tracked (frame, joint) observations set to zero
-  levels: [0.05, 0.10, 0.20, 0.30, 0.40]
+  levels: &jdrop [0.05, 0.10, 0.20, 0.30, 0.40]
 skeleton_part_dropout:  # joint groups removed in every frame (joints lost of 25: 4, 6, 9, 16, 20)
   levels: [one_leg, one_arm, lower_body, upper_body, upper_body_one_leg]
 skeleton_noise:         # Gaussian sigma as a fraction of body height
   levels: [0.01, 0.02, 0.04, 0.08, 0.12]
 skeleton_coupled_occlusion:  # joints behind the rgb_occlusion rectangle (same levels and seed) set to zero
   levels: *occlusion
+# Information-matched controls (review item A5): same frames / joints as the original, no sentinel values
+rgb_temporal_freeze:    # the rgb_temporal_mask block repeats the last frame before it
+  levels: *tmask
+skeleton_joint_interp:  # the skeleton_joint_dropout observations are linearly interpolated in time
+  levels: *jdrop
