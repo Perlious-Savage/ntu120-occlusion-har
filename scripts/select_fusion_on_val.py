@@ -13,7 +13,7 @@ fold under all 31 single-modality conditions (clean + 30). Train-feature heads a
 Needs outputs/m3_robustness/<branch>/val_corrupted/ (evaluate_corruptions.py --split val --out ...).
 Writes results/milestone3/fusion_selection_val.csv (+ .md) and prints the chosen setting per head
 next to its test numbers from <setting dir>/<method>_<protocol>_seed42/summary.csv.
-Usage: python scripts/select_fusion_on_val.py
+Usage: python scripts/select_fusion_on_val.py [xsub] [xset]
 """
 import sys
 from pathlib import Path
@@ -43,9 +43,10 @@ def score(acc):
 
 
 def main():
+    protocols = sys.argv[1:] or ['xsub', 'xset']   # e.g. `xsub` while the X-Set heads are being re-fitted
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     rows = []
-    for p in ('xsub', 'xset'):
+    for p in protocols:
         for setting, d in SETTINGS.items():
             for method in ('average', 'concat', 'global', 'attention'):
                 run = Path(d) / f'{method}_{p}_seed42'
@@ -86,7 +87,7 @@ def main():
     df = pd.DataFrame(rows)
     df['chosen_on_val'] = df.groupby(['protocol', 'method']).val_mCA.transform('max') == df.val_mCA
     OUT.mkdir(parents=True, exist_ok=True)
-    df.to_csv(OUT / 'fusion_selection_val.csv', index=False)
+    df.to_csv(OUT / f'fusion_selection_val{"_" + protocols[0] if len(protocols) == 1 else ""}.csv', index=False)
     md = ['# Fusion setting chosen on corrupted validation data (review item A1)', '',
           'Validation-trained settings scored out of fold. mCA = mean top-1 over the 30 single-modality '
           'corrupted conditions. **Bold** = chosen on validation; its test numbers are the ones to report.', '',
@@ -95,7 +96,7 @@ def main():
         b = '**' if r.chosen_on_val else ''
         md.append(f'| {r.protocol} | {r.method} | {b}{r.setting}{b} | {r.val_clean * 100:.2f} | {r.val_mCA * 100:.2f} | '
                   f'{r.test_clean * 100:.2f} | {r.test_mCA * 100:.2f} |')
-    (OUT / 'fusion_selection_val.md').write_text('\n'.join(md), encoding='utf-8')
+    (OUT / f'fusion_selection_val{"_" + protocols[0] if len(protocols) == 1 else ""}.md').write_text('\n'.join(md), encoding='utf-8')
     print('\n'.join(md))
 
 

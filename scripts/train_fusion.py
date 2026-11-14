@@ -171,6 +171,7 @@ def main():
     ap.add_argument('--epochs', type=int, help='override config epochs')
     ap.add_argument('--aux-weight', type=float, help='override config aux_weight (0 = ablation, written to <output_dir>_noaux)')
     ap.add_argument('--eval-only', action='store_true', help='reuse the saved checkpoint.pt (e.g. for new test conditions)')
+    ap.add_argument('--seed', type=int, help='override config seed (head seed only; the branch features stay seed 42)')
     args = ap.parse_args()
     cfg = yaml.safe_load(open(args.config))
     cfg.update(protocol=args.protocol, method=args.method)
@@ -180,6 +181,8 @@ def main():
         cfg['epochs'] = args.epochs
     if args.aux_weight is not None:
         cfg['aux_weight'] = args.aux_weight
+    if args.seed is not None:
+        cfg['seed'] = args.seed
     seed_everything(cfg['seed'])
     out = Path(cfg['output_dir'] + ('_trainfeat' if cfg['train_split'] == 'train' else '_noaux' if not cfg['aux_weight'] else ''))
     run = out / f'{args.method}_{args.protocol}_seed{cfg["seed"]}'
