@@ -123,12 +123,14 @@ def fit(cfg, method, tr, ev, device, keep_epoch=None):
 
 
 def cv_folds(ids, y, k, seed):
-    """Class-stratified folds for both protocols. Subject-grouped folds do not work for X-Sub: NTU-120
-    ties actions to subject groups (the 60 added actions were recorded by other subjects), so a
-    subject-held-out fold can contain classes absent from its training part (0% held-out accuracy).
-    The folds only choose a stopping epoch; the test split stays subject-disjoint."""
-    from sklearn.model_selection import StratifiedKFold
-    return list(StratifiedKFold(n_splits=k, shuffle=True, random_state=seed).split(ids, y))
+    """Class-stratified folds grouped by performance (setup, subject, replication, action): the camera
+    views of one take always fall in the same fold (review items A2/SC-5; per-sample folds put a sibling
+    view of every held-out sample into the fold's training part, and out-of-fold scores reached 97%
+    against 88% on test). Subject-grouped folds do not work for X-Sub: NTU-120 ties actions to subject
+    groups, so a subject-held-out fold can contain classes absent from its training part."""
+    from sklearn.model_selection import StratifiedGroupKFold
+    groups = [s[:4] + s[8:] for s in ids]                  # S###C###P###R###A### without the camera
+    return list(StratifiedGroupKFold(n_splits=k, shuffle=True, random_state=seed).split(ids, y, groups))
 
 
 def train(cfg, method, feats_train, feats_val, device, run):

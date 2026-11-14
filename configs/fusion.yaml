@@ -11,7 +11,8 @@ dropout: 0.5
 # so heads trained on training features cannot learn when a branch fails. k-fold CV inside the
 # validation split chooses where to stop.
 train_split: val         # val (main) | train (ablation, written to <output_dir>_trainfeat)
-cv_folds: 5              # class-stratified (subject-grouped folds lose whole classes in NTU-120)
+cv_folds: 5              # class-stratified, grouped by performance (all camera views of a take in one fold)
+cv_groups: performance   # recorded in each run config.yaml; runs without it used per-sample folds
 epochs: 100              # maximum; CV picks the stopping epoch (the train-feature ablation uses 30)
 aux_weight: 1.0          # + aux_weight * (CE(RGB aux head) + CE(skeleton aux head)); 0 = ablation (attention collapses onto RGB)
 batch_size: 256
