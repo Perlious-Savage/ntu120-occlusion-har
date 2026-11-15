@@ -13,6 +13,8 @@ Trained:      entropy_feat (4.5 feature level: entropy weights mix projected fea
 Reliability targets (4.7): 'tcp' = calibrated p(y_true); 'correct' = 1[branch argmax == y]. The plan's
 target B, exp(-cross-entropy), equals p(y_true) for hard labels, so it would duplicate target A; the binary
 correctness target is used as the second target instead.
+reliability_cross_* (addition to 4.6, chosen on validation like any variant): each branch's net also sees the other
+branch's lq, so agreement between the branches can flag confidently-wrong failures that one branch cannot see.
 """
 import math
 
@@ -154,12 +156,15 @@ class Reliability(nn.Module):
     Loss = CE(fused) [added by the trainer] + lam * MSE(r_m, target_m) for each branch."""
     trainable = True
 
-    def __init__(self, target='tcp', lam=1.0, d=256, dropout=0.5):
+    def __init__(self, target='tcp', lam=1.0, d=256, dropout=0.5, cross=False):
         super().__init__()
-        self.nr, self.ns, self.target, self.lam = reliability_net(512 + K, d, dropout), reliability_net(256 + K, d, dropout), target, lam
+        c = 2 * K if cross else K                          # cross: each net also sees the OTHER branch's lq
+        self.nr, self.ns = reliability_net(512 + c, d, dropout), reliability_net(256 + c, d, dropout)
+        self.target, self.lam, self.cross = target, lam, cross
 
     def forward(self, fr, fs, lr, ls, y=None, raw=None):
-        r = torch.cat([self.nr(torch.cat([fr, lr], 1)), self.ns(torch.cat([fs, ls], 1))], 1)
+        xr, xs = ([fr, lr, ls], [fs, ls, lr]) if self.cross else ([fr, lr], [fs, ls])
+        r = torch.cat([self.nr(torch.cat(xr, 1)), self.ns(torch.cat(xs, 1))], 1)
         w = r.clamp_min(1e-4) / r.clamp_min(1e-4).sum(1, keepdim=True)
         extra = 0
         if y is not None:
@@ -175,7 +180,9 @@ def build(name):
     if name in ('rgb', 'skeleton', 'average', 'calibrated_average', 'maxconf', 'entropy'):
         return Fixed(name)
     return {'entropy_feat': EntropyFeat, 'attention': Attention, 'moddrop': ModDrop, 'tmc': TMC,
-            'reliability_tcp': lambda: Reliability('tcp'), 'reliability_correct': lambda: Reliability('correct')}[name]()
+            'reliability_tcp': lambda: Reliability('tcp'), 'reliability_correct': lambda: Reliability('correct'),
+            'reliability_cross_tcp': lambda: Reliability('tcp', cross=True),
+            'reliability_cross_correct': lambda: Reliability('correct', cross=True)}[name]()
 
 
 if __name__ == '__main__':                                 # self-check: shapes, weights sum to 1, losses finite
@@ -186,7 +193,7 @@ if __name__ == '__main__':                                 # self-check: shapes,
     y = torch.randint(0, K, (b,))
     raw = (lr.exp(), ls.exp())
     for n in ('rgb', 'skeleton', 'average', 'calibrated_average', 'maxconf', 'entropy', 'entropy_feat', 'attention', 'moddrop', 'tmc',
-              'reliability_tcp', 'reliability_correct'):
+              'reliability_tcp', 'reliability_correct', 'reliability_cross_tcp', 'reliability_cross_correct'):
         m = build(n).train()
         lp, w, extra = m(fr, fs, lr, ls, y, raw)
         assert lp.shape == (b, K) and torch.allclose(lp.exp().sum(1), torch.ones(b), atol=1e-4), n

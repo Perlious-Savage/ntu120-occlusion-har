@@ -6,7 +6,8 @@ One process per protocol loads all branch outputs once (GPU-resident, float16).
 Output: <output_dir>/<protocol>_<setting>_seed<seed>.csv, one row per method x test condition:
   accuracy, macro_f1, ece, nll, brier, aurc, risk@coverage, coverage/risk at thresholds set on clean
   calib validation, mean_w_rgb.
-Usage: python scripts/m4_fusion.py --protocol xsub [--settings A B0 B1 B2] [--seeds 42] [--methods ...]
+Usage: python scripts/m4_fusion.py --protocol xsub [--settings A B0 B1 B2] [--seeds 42 1 2 3 4] [--methods ...]
+(seeds other than config seed rerun only the trained methods)
 """
 import argparse
 import sys
@@ -126,7 +127,7 @@ def main():
     args = ap.parse_args()
     cfg = yaml.safe_load(open(args.config))
     fcfg = yaml.safe_load(open(ROOT / 'configs/fusion.yaml'))
-    methods, seeds = args.methods or cfg['methods'], args.seeds or [cfg['seed']]
+    methods, seeds = args.methods or cfg['methods'], args.seeds or cfg['seeds']
     dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     base = {m: Path(cfg['features_dir']) / r.format(protocol=args.protocol) for m, r in cfg['branch_runs'].items()}
     fam = cfg['families']
@@ -179,8 +180,8 @@ def main():
                 cs = np.where(st == 2, gen.choice(ok['skeleton'], k), 0)
                 return torch.from_numpy(cr).to(dev), torch.from_numpy(cs).to(dev)
         for seed in seeds:
-            rows = []
-            for name in methods:
+            rows = []                                      # untrained methods do not depend on the head seed
+            for name in methods if seed == cfg['seed'] or args.methods else [x for x in methods if x in cfg['trained_methods']]:
                 t1 = time.time()
                 m = train(name, val, fit_rows, sampler, cfg, seed, dev)
                 z = torch.zeros(len(calib_rows), dtype=torch.long, device=dev)
