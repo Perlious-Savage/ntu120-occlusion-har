@@ -6,7 +6,7 @@ One process per protocol loads all branch outputs once (GPU-resident, float16).
 Output: <output_dir>/<protocol>_<setting>_seed<seed>.csv, one row per method x test condition:
   accuracy, macro_f1, ece, nll, brier, aurc, risk@coverage, coverage/risk at thresholds set on clean
   calib validation, mean_w_rgb.
-Usage: python scripts/m4_fusion.py --protocol xsub [--settings A B0 B1 B2] [--seeds 42 1 2 3 4] [--methods ...]
+Usage: python scripts/m4_fusion.py --protocol xsub [--settings A B0 B1 B2 Ball] [--seeds 42 1 2 3 4] [--methods ...]
 (seeds other than config seed rerun only the trained methods)
 """
 import argparse
@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / 'scripts'))
 from src.calibration import brier, ece, fit_temperature, nll, risk_coverage, val_half  # noqa: E402
 from src.corruptions.base import SEVERITIES  # noqa: E402
-from src.models.m4_fusion import build  # noqa: E402
+from src.models.m4_fusion import build, norm_entropy  # noqa: E402
 from train_fusion import test_conditions  # noqa: E402
 
 K = 120
@@ -83,19 +83,67 @@ def train(name, data, rows, sampler, cfg, seed, dev):
     opt = torch.optim.AdamW(m.parameters(), lr=o['lr'], weight_decay=o['weight_decay'])
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, epochs * int(np.ceil(len(rows) / bs)))
     gen = np.random.default_rng(seed)
+    m.log = []
     for ep in range(epochs):
         m.train()
         if hasattr(m, 'anneal'):
             m.anneal = min(1.0, ep / (0.1 * epochs))       # TMC: KL annealing (Han et al.: 50 of 500 epochs)
         cr, cs = sampler(len(rows), gen)
         perm = torch.from_numpy(gen.permutation(len(rows))).to(dev)
+        tot = ce = right = 0.0
         for idx in perm.split(bs):
             r = rows[idx]
             fr, fs, lr, ls, raw = data.gather(cr[idx], cs[idx], r)
             lp, _, extra = m(fr, fs, lr, ls, y=data.y[r], raw=raw)
-            loss = F.nll_loss(lp, data.y[r]) + extra
+            c = F.nll_loss(lp, data.y[r])
+            loss = c + extra
             opt.zero_grad(set_to_none=True); loss.backward(); opt.step(); sched.step()
+            tot += loss.item() * len(idx); ce += c.item() * len(idx); right += (lp.argmax(1) == data.y[r]).sum().item()
+        m.log.append({'epoch': ep, 'loss': tot / len(rows), 'fusion_ce': ce / len(rows),
+                      'extra_loss': (tot - ce) / len(rows), 'train_accuracy': right / len(rows)})
     return m
+
+
+def save_outputs(d, m, name, cfg, setting, seed, t, test, conds, stream, rows):
+    """Step 4.23 for one final run: config.yaml, checkpoint.pt, metrics.json, training_log.csv, predictions.csv and
+    probabilities.npy (clean test and the mixed stream), weights.csv.gz (every test condition, one row per sample;
+    segment_id 0 = whole sequence until the temporal model, 4.8). U = normalised entropy of the calibrated branch."""
+    import json
+    d.mkdir(parents=True, exist_ok=True)
+    yaml.safe_dump({**cfg, 'method': name, 'setting': setting, 'seed': seed, 'temperatures': t}, open(d / 'config.yaml', 'w'), sort_keys=False)
+    if m.trainable:
+        torch.save({'model_state_dict': m.state_dict(), 'method': name, 'setting': setting}, d / 'checkpoint.pt')
+        pd.DataFrame(m.log).to_csv(d / 'training_log.csv', index=False)
+    json.dump(rows, open(d / 'metrics.json', 'w'), indent=1)
+    n, ids, y = len(test.y), test.rgb.ids, test.rgb.y
+    allr = torch.arange(n, device=test.y.device)
+    parts, preds = [], []
+    for rc, sc in conds + [('mixed', 'mixed')]:
+        if rc == 'mixed':
+            cr, cs = stream
+        else:
+            cr = torch.full((n,), test.rgb.index[rc], device=allr.device); cs = torch.full((n,), test.sk.index[sc], device=allr.device)
+        lp, w = infer(m, test, cr, cs, allr)
+        with torch.no_grad():
+            u = [torch.cat([norm_entropy(test.gather(cr[i:i + 8192], cs[i:i + 8192], allr[i:i + 8192])[k])
+                            for i in range(0, n, 8192)]).cpu().numpy() for k in (2, 3)]
+        p = lp.exp().cpu().numpy(); pred = p.argmax(1)
+        if rc == 'mixed':
+            names_r = np.array(sorted(test.rgb.index, key=test.rgb.index.get))[cr.cpu().numpy()]
+            names_s = np.array(sorted(test.sk.index, key=test.sk.index.get))[cs.cpu().numpy()]
+        else:
+            names_r, names_s = np.full(n, rc), np.full(n, sc)
+        wr = np.full(n, np.nan) if w is None else w[:, 0].cpu().numpy()
+        df = pd.DataFrame({'sample_id': ids, 'segment_id': 0, 'stream': 'mixed' if rc == 'mixed' else 'fixed',
+                           'rgb_condition': names_r, 'skeleton_condition': names_s, 'true_label': y, 'predicted_label': pred,
+                           'confidence': p.max(1), 'rgb_uncertainty': u[0], 'skeleton_uncertainty': u[1],
+                           'rgb_weight': wr, 'skeleton_weight': 1 - wr})
+        parts.append(df)
+        if rc in ('clean', 'mixed'):
+            preds.append(df.assign(correct=df.predicted_label == df.true_label))
+            np.save(d / f'probabilities_{rc}.npy', p.astype(np.float16))
+    pd.concat(preds).to_csv(d / 'predictions.csv', index=False)
+    pd.concat(parts).to_csv(d / 'weights.csv.gz', index=False, float_format='%.4f')
 
 
 def metrics(lp, w, y, taus, coverages):
@@ -124,6 +172,7 @@ def main():
     ap.add_argument('--settings', nargs='+', default=['A', 'B0', 'B1', 'B2'])
     ap.add_argument('--seeds', nargs='+', type=int)
     ap.add_argument('--methods', nargs='+')
+    ap.add_argument('--save-dir', type=Path, help='also write the 4.23 per-sample outputs of every run (final runs only)')
     args = ap.parse_args()
     cfg = yaml.safe_load(open(args.config))
     fcfg = yaml.safe_load(open(ROOT / 'configs/fusion.yaml'))
@@ -168,11 +217,10 @@ def main():
         if setting == 'A':
             sampler = lambda k, gen: (torch.zeros(k, dtype=torch.long, device=dev),) * 2  # noqa: E731
             held = None
-        else:
-            j = int(setting[1])
-            held = (fam['rgb'][j], fam['skeleton'][j])
-            ok = {m: [vr.index[c] if m == 'rgb' else vs.index[c] for c in vconds[m][1:] if not c.startswith(held[m != 'rgb'])]
-                  for m in fam}
+        else:                                              # B0-B2: leave one family per modality out; Ball: none
+            held = None if setting == 'Ball' else (fam['rgb'][int(setting[1])], fam['skeleton'][int(setting[1])])
+            ok = {m: [vr.index[c] if m == 'rgb' else vs.index[c] for c in vconds[m][1:]
+                      if held is None or not c.startswith(held[m != 'rgb'])] for m in fam}
 
             def sampler(k, gen, ok=ok):
                 st = gen.choice(3, k, p=cfg['setting_b_prior'])
@@ -207,6 +255,9 @@ def main():
                                  'rgb_condition': rc, 'skeleton_condition': sc, 'calib_val_mca': calib_mca,
                                  **metrics(lp, w, test.y, taus, cfg['coverages'])})
                 r = {x['rgb_condition'] + '|' + x['skeleton_condition']: x['accuracy'] for x in rows if x['method'] == name}
+                if args.save_dir:
+                    save_outputs(args.save_dir / f'{name}_{args.protocol}_{setting}_seed{seed}', m, name, cfg, setting, seed, t,
+                                 test, conds, (stream_r, stream_s), [x for x in rows if x['method'] == name])
                 print(f'{setting} seed {seed} {name:>20}: clean {r["clean|clean"]:.4f}  mixed {r["mixed|mixed"]:.4f}  '
                       f'({time.time() - t1:.0f} s)', flush=True)
             pd.DataFrame(rows).to_csv(out / f'{args.protocol}_{setting}_seed{seed}.csv', index=False)

@@ -49,7 +49,7 @@ def main():
     for f in sorted(IN.glob('*.csv')):
         d = pd.read_csv(f)
         for m, g in d.groupby('method', sort=False):
-            rows.append({'protocol': g.protocol.iloc[0], 'setting': g.setting.iloc[0][0], 'rotation': g.setting.iloc[0],
+            rows.append({'protocol': g.protocol.iloc[0], 'setting': 'Ball' if g.setting.iloc[0] == 'Ball' else g.setting.iloc[0][0], 'rotation': g.setting.iloc[0],
                          'seed': g.seed.iloc[0], 'method': m, **summarise(g)})
     r = pd.DataFrame(rows)
     order = list(dict.fromkeys(r.method))
