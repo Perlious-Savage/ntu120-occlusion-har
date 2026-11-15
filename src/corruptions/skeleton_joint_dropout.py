@@ -41,16 +41,22 @@ class SkeletonJointInterp(Corruption):
 
     def _apply(self, x, p, rng, **_):
         masks = dropped(x, p, rng)
-        t = np.arange(x.shape[1])
         for m, drop in masks:
-            keep = x[..., m].any(axis=0) & ~drop               # (T, V)
-            for v in np.flatnonzero(drop.any(axis=0)):
-                k = keep[:, v]
-                if k.any():
-                    for c in range(3):
-                        x[c, drop[:, v], v, m] = np.interp(t[drop[:, v]], t[k], x[c, k, v, m])
-                else:                                          # no kept frame left: nothing to infer from
-                    x[:, drop[:, v], v, m] = 0
+            interpolate(x, m, drop)
         if len(masks) == 1:
             x[..., 1] = x[..., 0]
         return x
+
+
+def interpolate(x, m, drop):
+    """Refill the (T, V) `drop` observations of person slot m by linear interpolation in time from the
+    joint's kept tracked frames (held flat at the ends; zero if the joint has no kept frame)."""
+    t = np.arange(x.shape[1])
+    keep = x[..., m].any(axis=0) & ~drop
+    for v in np.flatnonzero(drop.any(axis=0)):
+        k = keep[:, v]
+        if k.any():
+            for c in range(3):
+                x[c, drop[:, v], v, m] = np.interp(t[drop[:, v]], t[k], x[c, k, v, m])
+        else:
+            x[:, drop[:, v], v, m] = 0

@@ -101,6 +101,17 @@ def test_controls_hit_the_same_frames_and_joints_without_sentinels():
         assert np.allclose(itp[:, inner], ramp[:, inner], atol=1e-5), s  # a linear trajectory is recovered
 
 
+def test_coupled_interp_refills_exactly_the_coupled_joints():
+    ramp = np.broadcast_to(np.linspace(-1, 1, 64)[None, :, None, None], SKEL.shape).astype(np.float32) + 2
+    for s in range(1, 6):                                          # single actor (copied slot): check slot 0
+        seed = sample_seed('S001C001P001R001A001', 'rgb_occlusion', s)
+        hidden = ~get('skeleton_coupled_occlusion').apply(ramp, s, seed, **CTX)[..., 0].any(axis=0)
+        out = get('skeleton_coupled_interp').apply(ramp, s, seed, **CTX)
+        changed = (out[..., 0] != ramp[..., 0]).any(axis=0)
+        assert hidden.any() and not (changed & ~hidden).any(), s     # only joints behind the box change
+        assert out.all() and np.array_equal(out[..., 0], out[..., 1])  # no zeros; the copy stays a copy
+
+
 def test_single_actor_copy_stays_a_copy():
     for name in SKELETON:
         out = get(name).apply(SKEL_SINGLE, 3, 9, **CTX)

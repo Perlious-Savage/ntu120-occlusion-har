@@ -3,7 +3,7 @@ from pathlib import Path
 
 import yaml
 
-from .coupled_occlusion import SkeletonCoupledOcclusion
+from .coupled_occlusion import SkeletonCoupledInterp, SkeletonCoupledOcclusion
 from .rgb_blur import RGBBlur
 from .rgb_occlusion import RGBOcclusion
 from .rgb_temporal_mask import RGBTemporalFreeze, RGBTemporalMask
@@ -16,7 +16,7 @@ _cfg = yaml.safe_load(open(CONFIG))
 
 CORRUPTIONS = {}
 for cls in (RGBOcclusion, RGBBlur, RGBTemporalMask, SkeletonJointDropout, SkeletonPartDropout, SkeletonNoise,
-            SkeletonCoupledOcclusion, RGBTemporalFreeze, SkeletonJointInterp):
+            SkeletonCoupledOcclusion, RGBTemporalFreeze, SkeletonJointInterp, SkeletonCoupledInterp):
     c = cls()
     c.levels = tuple(_cfg[c.name]['levels'])
     assert len(c.levels) == 5, f'{c.name}: need 5 levels (S1-S5)'

@@ -21,3 +21,5 @@ rgb_temporal_freeze:    # the rgb_temporal_mask block repeats the last frame bef
   levels: *tmask
 skeleton_joint_interp:  # the skeleton_joint_dropout observations are linearly interpolated in time
   levels: *jdrop
+skeleton_coupled_interp:  # the skeleton_coupled_occlusion joints refilled by interpolation in time
+  levels: *occlusion
