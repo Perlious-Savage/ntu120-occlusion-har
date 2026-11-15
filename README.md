@@ -173,6 +173,15 @@ NTU-120 ties actions to subject groups, so a held-out fold can contain classes t
 its training part. The CV folds and stopping epochs use validation data only; the choice of
 training setting per head did use test results (see the correction above).
 
+## What is stored on Drive (the work store is capped; keep it small)
+
+Only files a later step needs are kept: backbone checkpoints, per-condition branch outputs
+(`features.npy`, `probabilities.npy`, `predictions.csv`), fusion checkpoints, and per-condition
+`predictions.csv` / `weights.npy` of the seed-42 fusion heads (paired tests, weight analysis).
+Not kept: resumable shards (removed when `evaluate_corruptions.py` finishes; `--keep-shards` to keep),
+fusion probabilities (`save_probabilities: false`; `--eval-only` regenerates them), and per-sample
+files of the extra head seeds (`train_fusion.py --summary-only`).
+
 ## Decisions (documented per the milestone rules)
 
 - **Labels**: `action_id` 1-120, `label = action_id - 1` (0-119).

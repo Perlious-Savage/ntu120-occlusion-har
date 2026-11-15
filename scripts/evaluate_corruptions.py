@@ -17,6 +17,7 @@ Usage: python scripts/evaluate_corruptions.py --run outputs/r3d18_xsub_seed42 [-
 """
 import argparse
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -106,6 +107,8 @@ def main():
     ap.add_argument('--clean-only', action='store_true', help='only the clean condition (e.g. train/val features)')
     ap.add_argument('--corruption', choices=EXTRA, help="evaluate only this extra corruption (coupled occlusion or an A5 control; S1-S5), kept apart from the main shards")
     ap.add_argument('--out', type=Path)
+    ap.add_argument('--keep-shards', action='store_true', help='keep the resumable shards after the run finishes')
+    ap.add_argument('--force', action='store_true', help='recompute a finished run')
     ap.add_argument('--batch-size', type=int, help='samples per batch (each holds 16 conditions)')
     ap.add_argument('--workers', type=int)
     args = ap.parse_args()
@@ -113,6 +116,10 @@ def main():
     rgb = cfg['model']['name'] == 'r3d18'
     out = args.out or Path('outputs/m3_robustness') / args.run.name / Path(args.split).stem
     shard_dir = out / ('shards' + (f'_{args.corruption}' if args.corruption else ''))
+    summary = out / (f'summary_{args.corruption}.csv' if args.corruption else 'summary.csv')
+    if summary.exists() and not shard_dir.exists() and not args.force:
+        print(f'{summary} exists (shards removed after the run finished); use --force to recompute')
+        return
     shard_dir.mkdir(parents=True, exist_ok=True)
     conditions = condition_list('rgb' if rgb else 'skeleton', args.clean_only, args.corruption)
     k = len(conditions)
@@ -171,7 +178,9 @@ def main():
     df = pd.DataFrame(rows)
     clean = json.load(open(out / 'clean/metrics.json'))['top1_accuracy']
     df['robustness_ratio'] = df.top1_accuracy / clean
-    df.to_csv(out / (f'summary_{args.corruption}.csv' if args.corruption else 'summary.csv'), index=False)
+    df.to_csv(summary, index=False)
+    if not args.keep_shards:      # shards duplicate the per-condition files; they only serve resuming a run
+        shutil.rmtree(shard_dir)
     print(df[['corruption', 'severity', 'top1_accuracy', 'top5_accuracy', 'macro_f1', 'robustness_ratio']]
           .to_string(index=False, float_format='%.4f'))
     print(f'-> {out}')

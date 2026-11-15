@@ -173,6 +173,8 @@ def main():
     ap.add_argument('--epochs', type=int, help='override config epochs')
     ap.add_argument('--aux-weight', type=float, help='override config aux_weight (0 = ablation, written to <output_dir>_noaux)')
     ap.add_argument('--eval-only', action='store_true', help='reuse the saved checkpoint.pt (e.g. for new test conditions)')
+    ap.add_argument('--summary-only', action='store_true',
+                    help='write only metrics.json per condition and summary.csv (extra head seeds; keeps the Drive store small)')
     ap.add_argument('--seed', type=int, help='override config seed (head seed only; the branch features stay seed 42)')
     args = ap.parse_args()
     cfg = yaml.safe_load(open(args.config))
@@ -217,12 +219,13 @@ def main():
         d = run / 'test' / f'{rc}+{sc}'
         d.mkdir(parents=True, exist_ok=True)
         pred = probs.argmax(1)
-        pd.DataFrame({'sample_id': ids, 'true_label': y, 'predicted_label': pred, 'confidence': probs.max(1),
-                      'correct': pred == y}).to_csv(d / 'predictions.csv', index=False)
+        if not args.summary_only:                           # per-sample files: ~3 MB per condition
+            pd.DataFrame({'sample_id': ids, 'true_label': y, 'predicted_label': pred, 'confidence': probs.max(1),
+                          'correct': pred == y}).to_csv(d / 'predictions.csv', index=False)
+            if w is not None:
+                np.save(d / 'weights.npy', w.astype(np.float16))
         if cfg.get('save_probabilities', False):           # ~12 MB per condition: off by default (Drive quota);
             np.save(d / 'probabilities.npy', probs.astype(np.float16))   # rerun with --eval-only to regenerate
-        if w is not None:
-            np.save(d / 'weights.npy', w.astype(np.float16))
         split = lambda c: (c.rsplit('_s', 1)[0], int(c.rsplit('_s', 1)[1])) if c != 'clean' else ('clean', 0)  # noqa: E731
         (rcn, rs), (scn, ss) = split(rc), split(sc)
         m = {'method': args.method, 'protocol': args.protocol, 'rgb_corruption': rcn, 'rgb_severity': rs,
