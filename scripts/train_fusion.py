@@ -31,7 +31,7 @@ from src.engine import classification_metrics, seed_everything  # noqa: E402
 from src.models.fusion import FusionHead, load_head  # noqa: E402
 
 METHODS = ('average', 'concat', 'global', 'attention')
-EXTRA_KEYS = ('dual_corruptions', 'coupled_corruptions', 'control_corruptions')   # test-only; ignored by --eval-only checks
+EXTRA_KEYS = ('dual_corruptions', 'coupled_corruptions', 'control_corruptions', 'save_probabilities')   # test-only; ignored by --eval-only checks
 
 
 class Features:
@@ -219,7 +219,8 @@ def main():
         pred = probs.argmax(1)
         pd.DataFrame({'sample_id': ids, 'true_label': y, 'predicted_label': pred, 'confidence': probs.max(1),
                       'correct': pred == y}).to_csv(d / 'predictions.csv', index=False)
-        np.save(d / 'probabilities.npy', probs.astype(np.float16))
+        if cfg.get('save_probabilities', False):           # ~12 MB per condition: off by default (Drive quota);
+            np.save(d / 'probabilities.npy', probs.astype(np.float16))   # rerun with --eval-only to regenerate
         if w is not None:
             np.save(d / 'weights.npy', w.astype(np.float16))
         split = lambda c: (c.rsplit('_s', 1)[0], int(c.rsplit('_s', 1)[1])) if c != 'clean' else ('clean', 0)  # noqa: E731

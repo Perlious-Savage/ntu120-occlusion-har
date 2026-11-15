@@ -32,3 +32,6 @@ output_dir: outputs/m3_fusion
 # Information-matched controls (review item A5): same frames / joints as the temporal mask and joint
 # dropout, without black frames or zeroed joints. Evaluated with the other modality clean.
 control_corruptions: [rgb_temporal_freeze, skeleton_joint_interp]
+# Per-condition fusion probabilities (~12 MB each, ~60 conditions per run) filled the Drive quota; off by
+# default. predictions.csv, metrics.json, weights.npy and the checkpoint are always written.
+save_probabilities: false
