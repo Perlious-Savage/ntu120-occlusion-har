@@ -228,6 +228,9 @@ def main():
                 cs = np.where(st == 2, gen.choice(ok['skeleton'], k), 0)
                 return torch.from_numpy(cr).to(dev), torch.from_numpy(cs).to(dev)
         for seed in seeds:
+            if (out / f'{args.protocol}_{setting}_seed{seed}.csv').exists() and not args.save_dir:
+                print(f'{setting} seed {seed}: done earlier, skipped', flush=True)   # resume after a lost session
+                continue
             rows = []                                      # untrained methods do not depend on the head seed
             for name in methods if seed == cfg['seed'] or args.methods else [x for x in methods if x in cfg['trained_methods']]:
                 t1 = time.time()
