@@ -76,15 +76,20 @@ Both modalities corrupted: independently, or by one occluder that hides the RGB 
 | RGB blur S3 + Coordinate noise S3 | 74.22 | 41.41 | 74.61 | 73.57 | 74.47 | 77.72 |
 | RGB blur S4 + Coordinate noise S1 | 56.27 | 58.49 | 68.89 | 73.49 | 73.58 | 78.58 |
 | RGB blur S4 + Coordinate noise S4 | 56.27 | 19.78 | 54.78 | 52.73 | 53.45 | 53.79 |
+| nan | 83.26 |  | 87.54 | 86.52 | 86.72 | 89.11 |
 | RGB occlusion S1 + Coupled occlusion (joints behind the box) S1 | 83.26 |  | 86.71 | 85.60 | 85.95 | 88.40 |
 | RGB occlusion S1 + Body-part dropout S4 | 83.26 | 6.36 | 82.70 | 75.08 | 76.88 | 82.29 |
+| nan | 79.86 |  | 84.17 | 83.25 | 83.62 | 86.35 |
 | RGB occlusion S2 + Coupled occlusion (joints behind the box) S2 | 79.86 |  | 83.03 | 82.01 | 82.46 | 85.30 |
 | RGB occlusion S2 + Body-part dropout S2 | 79.86 | 60.44 | 82.10 | 80.28 | 81.21 | 83.94 |
+| nan | 75.74 |  | 80.35 | 79.31 | 79.64 | 82.94 |
 | RGB occlusion S3 + Coupled occlusion (joints behind the box) S3 | 75.74 |  | 78.59 | 77.74 | 78.58 | 81.68 |
 | RGB occlusion S3 + Body-part dropout S3 | 75.74 | 65.40 | 82.82 | 81.20 | 81.70 | 85.78 |
+| nan | 71.62 |  | 75.43 | 74.40 | 74.98 | 78.76 |
 | RGB occlusion S4 + Coupled occlusion (joints behind the box) S4 | 71.62 |  | 73.29 | 72.39 | 73.62 | 77.47 |
 | RGB occlusion S4 + Body-part dropout S1 | 71.62 | 80.76 | 84.77 | 83.18 | 82.90 | 86.79 |
 | RGB occlusion S4 + Body-part dropout S4 | 71.62 | 6.36 | 70.30 | 61.07 | 63.00 | 69.44 |
+| nan | 66.47 |  | 69.65 | 68.46 | 69.26 | 73.55 |
 | RGB occlusion S5 + Coupled occlusion (joints behind the box) S5 | 66.47 |  | 67.36 | 66.67 | 67.97 | 72.34 |
 | RGB temporal mask S1 + Joint dropout S4 | 45.76 | 20.50 | 47.77 | 49.12 | 51.95 | 58.00 |
 | RGB temporal mask S2 + Joint dropout S2 | 53.27 | 55.15 | 66.69 | 66.54 | 68.26 | 72.97 |
@@ -193,15 +198,20 @@ Both modalities corrupted: independently, or by one occluder that hides the RGB 
 | RGB blur S3 + Coordinate noise S3 | 75.44 | 27.97 | 75.05 | 76.25 | 76.77 | 77.75 |
 | RGB blur S4 + Coordinate noise S1 | 57.82 | 61.05 | 72.09 | 77.15 | 76.92 | 78.91 |
 | RGB blur S4 + Coordinate noise S4 | 57.82 | 9.49 | 54.93 | 56.08 | 56.92 | 55.31 |
+| nan | 84.73 |  | 89.55 | 90.22 | 90.09 | 90.99 |
 | RGB occlusion S1 + Coupled occlusion (joints behind the box) S1 | 84.73 |  | 88.75 | 89.38 | 89.34 | 90.15 |
 | RGB occlusion S1 + Body-part dropout S4 | 84.73 | 7.43 | 83.15 | 78.93 | 82.27 | 75.48 |
+| nan | 80.91 |  | 86.14 | 87.06 | 87.01 | 87.91 |
 | RGB occlusion S2 + Coupled occlusion (joints behind the box) S2 | 80.91 |  | 85.02 | 85.72 | 85.74 | 86.75 |
 | RGB occlusion S2 + Body-part dropout S2 | 80.91 | 62.37 | 83.42 | 84.17 | 84.88 | 85.19 |
+| nan | 76.32 |  | 81.70 | 82.95 | 83.00 | 83.97 |
 | RGB occlusion S3 + Coupled occlusion (joints behind the box) S3 | 76.32 |  | 79.92 | 81.21 | 81.45 | 82.30 |
 | RGB occlusion S3 + Body-part dropout S3 | 76.32 | 63.21 | 83.94 | 85.06 | 85.01 | 86.77 |
+| nan | 71.47 |  | 75.92 | 77.74 | 77.92 | 78.73 |
 | RGB occlusion S4 + Coupled occlusion (joints behind the box) S4 | 71.47 |  | 73.85 | 74.99 | 75.79 | 76.47 |
 | RGB occlusion S4 + Body-part dropout S1 | 71.47 | 82.00 | 86.44 | 86.46 | 86.13 | 88.22 |
 | RGB occlusion S4 + Body-part dropout S4 | 71.47 | 7.43 | 68.94 | 63.91 | 68.41 | 61.15 |
+| nan | 66.24 |  | 69.56 | 71.71 | 72.05 | 72.93 |
 | RGB occlusion S5 + Coupled occlusion (joints behind the box) S5 | 66.24 |  | 67.01 | 68.00 | 69.07 | 69.85 |
 | RGB temporal mask S1 + Joint dropout S4 | 45.83 | 7.45 | 37.56 | 40.29 | 43.48 | 41.12 |
 | RGB temporal mask S2 + Joint dropout S2 | 45.37 | 38.96 | 53.64 | 63.31 | 60.70 | 64.52 |

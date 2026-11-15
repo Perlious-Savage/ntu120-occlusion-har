@@ -127,17 +127,24 @@ four trained heads there too). Title keeps "occlusion" because B5 is now in plac
 
 ## B5. Occlusion evidence
 
-**Coupled occlusion** (RGB box S1-S5 and every joint whose colour-camera projection lies behind it):
+**Coupled occlusion** (RGB box S1-S5 and every joint whose colour-camera projection lies behind it;
+hidden joints either zeroed or, as Kinect does, interpolated in time from the frames where they are visible):
 
 | Top-1 (%) | S1 | S3 | S5 |
 |---|---|---|---|
-| CTR-GCN X-Sub (joints behind the box zeroed) | 76.8 | 60.1 | 41.3 |
-| R3D-18 X-Sub (same box) | 83.3 | 75.7 | 66.5 |
-| Attention fusion X-Sub | 88.4 | 81.7 | 72.3 |
-| Attention fusion X-Set | 90.1 | 82.3 | 69.9 |
+| R3D-18 X-Sub (the box alone) | 83.3 | 75.7 | 66.5 |
+| CTR-GCN X-Sub, hidden joints zeroed | 76.8 | 60.1 | 41.3 |
+| CTR-GCN X-Sub, hidden joints interpolated | 80.4 | 68.5 | 50.0 |
+| Average fusion X-Sub (interpolated) | 87.5 | 80.4 | 69.7 |
+| Attention fusion X-Sub (interpolated) | 89.1 | 82.9 | 73.5 |
+| Average fusion X-Set (interpolated) | 89.6 | 81.7 | 69.6 |
+| Attention fusion X-Set (interpolated) | 91.0 | 84.0 | 72.9 |
 
-The skeleton side still uses zeros; an interpolated variant is the next run (A5 shows zeros overstate the
-skeleton loss).
+Unlike random joint dropout (interpolation recovers almost everything), interpolation recovers only 4-9
+points here: the box is static, so a joint behind it is usually hidden in every frame and there is
+nothing to interpolate from. Coupled occlusion is therefore genuine information loss in both modalities,
+and fusion stays above both branches. It is also the one condition family where attention fusion beats
+averaging clearly (by 3-4 points at S3-S5 on both protocols; seed 42 only on these conditions).
 
 **Natural occlusion** (Kinect "inferred" joints, 15.8% of joint observations; within each class, samples
 above vs below the class median inferred share):
@@ -156,5 +163,6 @@ per-sample files are no longer written (README, "What is stored on Drive").
 
 ## Still open
 
-- Coupled occlusion with interpolated (not zeroed) hidden joints.
+- Head-seed variance on the coupled, control and natural-occlusion conditions (the seed runs were
+  evaluated on the 30 standard conditions only).
 - Group B items are M4 design constraints; Groups C/D are paper-stage.
