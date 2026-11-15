@@ -143,7 +143,10 @@ class TMC(nn.Module):
 
 
 def reliability_net(d_in, d=256, dropout=0.5):
-    return nn.Sequential(nn.Linear(d_in, d), nn.GELU(), nn.Dropout(dropout), nn.Linear(d, 1), nn.Sigmoid())
+    """The plan's Linear -> GELU -> Dropout -> Linear -> Sigmoid, with a LayerNorm on the input: the frozen
+    features are large and non-negative, and without it the sigmoid saturated at the first step, so both
+    reliabilities sat at the same bound and the weights stayed exactly 0.5 / 0.5."""
+    return nn.Sequential(nn.LayerNorm(d_in), nn.Linear(d_in, d), nn.GELU(), nn.Dropout(dropout), nn.Linear(d, 1), nn.Sigmoid())
 
 
 class Reliability(nn.Module):
@@ -192,6 +195,20 @@ if __name__ == '__main__':                                 # self-check: shapes,
         assert torch.isfinite(loss), n
         if m.trainable:
             loss.backward()
+    # the reliability weights must learn which branch is right (large non-negative features, as the frozen ones)
+    n = 2000
+    y = torch.randint(0, K, (n,)); good = torch.rand(n) < 0.5
+    zr, zs = torch.randn(n, K), torch.randn(n, K)
+    zr[torch.arange(n), y] += 6 * good; zs[torch.arange(n), y] += 6 * ~good
+    lr, ls, fr, fs = F.log_softmax(zr, 1), F.log_softmax(zs, 1), 5 * torch.randn(n, 512).abs(), 5 * torch.randn(n, 256).abs()
+    m = build('reliability_tcp'); opt = torch.optim.AdamW(m.parameters(), 1e-3)
+    for _ in range(800):
+        i = torch.randint(0, n, (256,))
+        lp, w, extra = m.train()(fr[i], fs[i], lr[i], ls[i], y=y[i])
+        opt.zero_grad(); (F.nll_loss(lp, y[i]) + extra).backward(); opt.step()
+    with torch.no_grad():
+        w = m.eval()(fr, fs, lr, ls)[1]
+    assert w[good, 0].mean() > 0.8 and w[~good, 0].mean() < 0.2, (w[good, 0].mean(), w[~good, 0].mean())
     a1, a2 = torch.full((1, K), 1.0), torch.full((1, K), 1.0)   # no evidence + no evidence -> uniform, u = 1
     a, (u1, _) = TMC.combine(a1, a2)
     assert torch.allclose(a, torch.ones(1, K)) and torch.allclose(u1, torch.ones(1, 1))
