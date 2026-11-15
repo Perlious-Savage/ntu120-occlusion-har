@@ -137,3 +137,23 @@ separate the information lost from the black-frame artifact; it is not part of t
 
 - Corruption pairs: occlusion + body-part dropout, blur + coordinate noise, and temporal mask + joint dropout.
 - Severity pairs (RGB, skeleton): (2, 2), (3, 3), (4, 4), (4, 1) and (1, 4).
+
+## Extra conditions (review items A5 and B5)
+
+Evaluated separately (`evaluate_corruptions.py --corruption <name>`); they are not in the main
+benchmark lists or its mCA. Each reuses the seed of the corruption it mirrors (`seed_as`), so it
+affects exactly the same frames, joints or pixels.
+
+| Name | Mirrors | What changes |
+|---|---|---|
+| `rgb_temporal_freeze` | `rgb_temporal_mask` | the masked block repeats the last visible frame instead of going black |
+| `skeleton_joint_interp` | `skeleton_joint_dropout` | dropped joints are interpolated in time from the joint's kept frames instead of zeroed |
+| `skeleton_coupled_occlusion` | `rgb_occlusion` | every joint whose colour-camera projection lies behind the RGB rectangle is zeroed (needs `skeleton_color_f16.bin`) |
+| `skeleton_coupled_interp` | `rgb_occlusion` | the same hidden joints are interpolated in time instead of zeroed, like Kinect inferred joints |
+
+The first two separate information loss from sentinel artifacts (black frames, zero joints). Measured on
+X-Sub test: two black frames cost R3D-18 40 points, two frozen frames 2-3; dropping 40% of joints costs
+CTR-GCN 71 points with zeros and 4 points with interpolation. Results: `docs/milestone3_revision.md`.
+
+The fusion heads see these with the other modality clean (`control_corruptions` in `configs/fusion.yaml`)
+or, for the coupled ones, paired with `rgb_occlusion` at the same severity (`coupled_corruptions`).
