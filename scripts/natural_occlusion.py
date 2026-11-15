@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from m3_report import FUSION, FUSION_SOURCE, LABEL, OUT, PROTOCOLS, ROB, md_table  # noqa: E402
+from m3_report import FUSION, LABEL, OUT, PROTOCOLS, ROB, fusion_dir, md_table  # noqa: E402
 
 BINS = 5
 
@@ -27,7 +27,7 @@ BINS = 5
 def predictions(p):
     """sample_id x method -> correct (clean test), for the branches and every fusion method found."""
     src = {'rgb_only': ROB / f'r3d18_{p}_seed42/test/clean', 'skeleton_only': ROB / f'ctrgcn_{p}_seed42/test/clean'}
-    src.update({m: Path(FUSION_SOURCE[m]) / f'{m}_{p}_seed42/test/clean+clean' for m in FUSION})
+    src.update({m: Path(fusion_dir(p, m)) / f'{m}_{p}_seed42/test/clean+clean' for m in FUSION})
     cols = {m: pd.read_csv(d / 'predictions.csv').set_index('sample_id').correct for m, d in src.items()
             if (d / 'predictions.csv').exists()}
     y = pd.read_csv(src['rgb_only'] / 'predictions.csv').set_index('sample_id').true_label

@@ -24,11 +24,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.corruptions.registry import RGB, SKELETON  # noqa: E402
 
 ROB, OUT = Path('outputs/m3_robustness'), Path('results/milestone3')
-# Each baseline is reported in its strongest training setting (fusion_ablation.csv): concat and global
-# gain more from the 56k training features than from seeing held-out errors; attention needs the
-# genuine errors of the frozen branches on the held-out validation split. The others are ablations.
-FUSION_SOURCE = {'average': 'outputs/m3_fusion', 'concat': 'outputs/m3_fusion_trainfeat',
-                 'global': 'outputs/m3_fusion_trainfeat', 'attention': 'outputs/m3_fusion'}
+# Each fusion head is reported in the training setting chosen on CORRUPTED VALIDATION data (review item A1;
+# scripts/select_fusion_on_val.py writes fusion_selection_val_<protocol>.csv). Without that file the
+# pre-declared setting (validation split + aux loss, outputs/m3_fusion) is used. Test results never choose.
+SETTING_DIR = {'val_aux': 'outputs/m3_fusion', 'val_noaux': 'outputs/m3_fusion_noaux', 'trainfeat': 'outputs/m3_fusion_trainfeat'}
+
+
+def fusion_dir(protocol, method):
+    f = Path('results/milestone3') / f'fusion_selection_val_{protocol}.csv'
+    if f.exists():
+        sel = pd.read_csv(f)
+        row = sel[(sel.method == method) & sel.chosen_on_val]
+        if len(row):
+            return SETTING_DIR[row.setting.iloc[0]]
+    return 'outputs/m3_fusion'
+
+
 PROTOCOLS = ['xsub', 'xset']
 FUSION = ['average', 'concat', 'global', 'attention']
 METHODS = ['rgb_only', 'skeleton_only'] + FUSION
@@ -64,7 +75,7 @@ def long_table():
                          'skeleton_corruption': r.corruption, 'skeleton_severity': r.severity,
                          'top1_accuracy': r.top1_accuracy, 'top5_accuracy': r.top5_accuracy, 'macro_f1': r.macro_f1})
         for m in FUSION:
-            f = Path(FUSION_SOURCE[m]) / f'{m}_{p}_seed42' / 'summary.csv'
+            f = Path(fusion_dir(p, m)) / f'{m}_{p}_seed42' / 'summary.csv'
             if f.exists():
                 rows += pd.read_csv(f).assign(protocol=p, method=m).to_dict('records')
             else:
@@ -233,9 +244,9 @@ def main():
     md = ['# Milestone 3 results', '',
           'Top-1 accuracy (%) on the official test splits. Frozen Milestone 2 backbones (seed 42). Fusion heads are '
           'trained on clean features only and tested under corruption without retraining. Each is reported in '
-          'its strongest setting: concat and global on the training features (epoch chosen on validation), '
-          'attention on the held-out validation split (5-fold CV picks the stopping epoch). The other '
-          'settings are in `fusion_ablation.csv`. Corruption definitions: `docs/corruption_protocol.md`.', '']
+          'the training setting chosen on corrupted validation data (`fusion_selection_val_<protocol>.md`; '
+          'test results choose nothing). CV folds are grouped by performance. Corruption definitions: '
+          '`docs/corruption_protocol.md`.', '']
     for p in PROTOCOLS:
         md += [f'## {p.upper()}', '', '### Single-modality robustness (3.6)', '']
         rows = []
