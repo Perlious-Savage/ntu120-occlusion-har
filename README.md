@@ -121,6 +121,16 @@ python scripts/compare_baselines.py                              # results table
 Both baselines reach 100% training accuracy on the 64-sample overfit test. On a 6 GB GPU use
 `--batch-size 8 --workers 4` for local checks.
 
+## Milestone 3 results (revised after the review panel)
+
+`docs/milestone3_revision.md` answers the review items with the measured numbers; tables are in
+`results/milestone3/` (`milestone3_results.md`, `fusion_selection_val_*.md`, `stats.md`,
+`seed_variance.md`, `natural_occlusion.md`). In short: chosen on corrupted validation data and averaged
+over 5 head seeds, no learned fusion head beats plain probability averaging beyond seed noise; the zero
+and black-frame corruptions mostly measure sentinel fragility (interpolated / frozen controls lose far
+less); coupled and natural occlusion hurt the skeleton most while fusion stays above both branches; a
+per-sample oracle leaves 3.4-3.5 points of headroom over averaging for Milestone 4.
+
 ## Milestone 3 commands (corruption benchmark and fusion baselines)
 
 Corruption definitions and levels: `docs/corruption_protocol.md`, `configs/corruptions.yaml`.
