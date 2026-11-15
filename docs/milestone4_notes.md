@@ -54,5 +54,5 @@ in `results/milestone4/`.
 2. Is the binary-correctness target acceptable as Target B (deviation 1)?
 3. Is head-level corruption-aware training on frozen branches acceptable for Setting B (deviation 4), or
    should the backbones also be fine-tuned on corrupted clips (would change the Milestone 2 baselines)?
-4. May the cross-modal reliability variant (deviation 5) be reported as the proposed method if it wins on
-   validation?
+4. Cross-modal reliability (deviation 5): it ties with the plain reliability head on validation (X-Sub 87.09 vs
+   87.12, X-Set 89.14 vs 89.14 mCA), so the plain head is the proposed method and the cross-modal one an ablation.

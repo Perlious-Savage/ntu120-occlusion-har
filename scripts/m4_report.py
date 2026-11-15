@@ -52,7 +52,7 @@ def main():
             rows.append({'protocol': g.protocol.iloc[0], 'setting': 'Ball' if g.setting.iloc[0] == 'Ball' else g.setting.iloc[0][0], 'rotation': g.setting.iloc[0],
                          'seed': g.seed.iloc[0], 'method': m, **summarise(g)})
     r = pd.DataFrame(rows)
-    order = list(dict.fromkeys(r.method))
+    order = yaml.safe_load(open('configs/m4.yaml'))['methods']
     per_seed = r.groupby(['protocol', 'setting', 'method', 'seed'], sort=False).mean(numeric_only=True)  # B: mean over rotations
     t = per_seed.groupby(level=[0, 1, 2], sort=False).mean()
     sd = per_seed.groupby(level=[0, 1, 2], sort=False)[['mCA', 'mixed_acc']].std().add_suffix('_sd')

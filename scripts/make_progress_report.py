@@ -67,7 +67,7 @@ NICE = {'rgb': 'RGB only (R3D-18)', 'skeleton': 'Skeleton only (CTR-GCN)', 'aver
 def m4_main(protocol, t):
     """Setting B for trained heads (corruption-aware, mean over the leave-one-family-out rotations), untrained
     methods have no training; every number is a mean over the head seeds present (+- SD of mCA / mixed)."""
-    rows = [['Method', 'Clean', 'mCA (30 cond.)', 'Out-of-family', 'Coupled occl.', 'Mixed stream', 'Mixed ECE',
+    rows = [['Method', 'Clean', 'mCA (30 cond.)', 'Out-of- family', 'Coupled occl.', 'Mixed stream', 'Mixed ECE',
              'Mixed AURC', 'Clean ECE', 'Seeds']]
     g = t[(t.protocol == protocol) & (t.setting == 'B')]
     best = g.loc[g.mCA.idxmax(), 'method']
@@ -76,12 +76,12 @@ def m4_main(protocol, t):
         sd = lambda v: '' if pd.isna(v) or r.n_seeds < 2 else f' &plusmn; {100 * v:.2f}'  # noqa: E731
         trained = r.method in TRAINED
         rows.append([NICE.get(r.method, r.method), pct(r.clean_acc, 2), pct(r.mCA, 2) + sd(r.mCA_sd),
-                     pct(r.out_family_mCA, 2) if trained else '(no training)', pct(r.coupled_interp, 2),
+                     pct(r.out_family_mCA, 2) if trained else '-', pct(r.coupled_interp, 2),
                      pct(r.mixed_acc, 2) + sd(r.mixed_acc_sd), f'{r.mixed_ece:.3f}', f'{r.mixed_aurc:.4f}',
                      f'{r.clean_ece:.3f}', int(r.n_seeds)])
         if r.method == best or str(r.method).startswith('reliability'):
             hl.append(i)
-    return table(rows, [3.9 * cm, 1.2 * cm, 2.2 * cm, 1.8 * cm, 1.4 * cm, 2.2 * cm, 1.3 * cm, 1.3 * cm, 1.2 * cm, 1.0 * cm],
+    return table(rows, [3.7 * cm, 1.2 * cm, 2.2 * cm, 1.9 * cm, 1.5 * cm, 2.2 * cm, 1.2 * cm, 1.3 * cm, 1.2 * cm, 1.1 * cm],
                  hl=hl)
 
 
@@ -108,12 +108,13 @@ def main():
                  ['M2 Single-modality baselines', 'Done', 'R3D-18 85.75 / 87.17%, CTR-GCN 83.54 / 84.93% (X-Sub / X-Set top-1)'],
                  ['M3 Corruption benchmark + fusion baselines', 'Done (revised)', '6 corruptions x 5 severities + 4 extra conditions; '
                   'no learned fusion head beats probability averaging beyond seed noise'],
-                 ['M4 Uncertainty-aware dynamic fusion', 'In progress', 'Learned reliability with corruption-aware training: '
-                  'best mCA on both protocols (see Section 5); temporal model pending Q1']],
+                 ['M4 Uncertainty-aware dynamic fusion', 'In progress', 'Learned reliability (corruption-aware): mCA 86.90 / 88.25 vs 85.54 / 86.67 for '
+                  'averaging (X-Sub / X-Set, 5 seeds); temporal model pending Q1']],
                 [4.2 * cm, 2.2 * cm, 11.1 * cm]), Spacer(1, 6)]
 
     s += [P('2. Decisions needed', H1),
-          P('Each question has the context needed to answer it; my recommendation is given in italics.')]
+          P('Each question has the context needed to answer it; my recommendation is given in italics. Q1-Q3 need an '
+            'answer before the temporal part (steps 4.8-4.10) starts.')]
     qs = [('Q1. Temporal segments (step 4.8: "start with 8 temporal segments").',
            'The frozen R3D-18 receives 16 frames; its feature maps keep 4 time steps after layer 3 and 2 after layer 4 '
            '(measured). CTR-GCN keeps 16 steps for its 64-frame window. Eight RGB segments are therefore not available '
@@ -135,7 +136,9 @@ def main():
            'Under realistic corruptions (frozen frames, coupled occlusion) a branch is often confidently wrong, which '
            'its own uncertainty cannot reveal (Section 5.1). A variant lets each reliability network also see the other '
            "branch's prediction, so disagreement can lower trust. It is selected on validation like any other variant.",
-           '<i>Allow it as the proposed method if it wins on validation; otherwise report it as an ablation.</i>')]
+           '<i>Result: on validation it ties with the plain reliability head (X-Sub 87.09 vs 87.12, X-Set 89.14 vs 89.14 '
+           'mCA), so the plain head stays the proposed method and the cross-modal variant is reported as an ablation. '
+           'No decision needed unless you prefer otherwise.</i>')]
     for q, ctx, rec in qs:
         s += [KeepTogether([P(f'<b>{q}</b>'), P(ctx), P(rec), Spacer(1, 4)])]
 
@@ -216,10 +219,10 @@ def main():
           P('Error AUROC: how well the branch\'s calibrated entropy separates its own errors from correct predictions '
             'within one condition. Corruption AUROC: how well it separates corrupted from clean inputs. Confidently wrong '
             '= share of errors made with calibrated confidence &ge; 0.5.', CAP),
-          P('<b>Finding.</b> Temperature scaling fixes clean calibration (ECE 0.05-0.08 to 0.02-0.03). Sentinel '
-            'corruptions (black frames, zeroed joints) are easy to detect from entropy (corruption AUROC 0.92-0.99), '
+          P('<b>Finding.</b> Temperature scaling fixes clean calibration (validation ECE 0.04-0.08 to 0.02-0.03). Sentinel '
+            'corruptions (black frames, zeroed joints) are easy to detect from entropy (corruption AUROC 0.88-0.99), '
             'but the realistic ones are not: under frozen frames, coupled occlusion and interpolated joints, '
-            '38-50% of the errors are confidently wrong. Entropy alone cannot flag them, which motivates the learned '
+            '38-54% of the errors are confidently wrong. Entropy alone cannot flag them, which motivates the learned '
             'and cross-modal reliability (Q4).'),
           fig(R4 / 'fig_branch_uncertainty_xsub.png', 13 * cm, 'X-Sub: accuracy, mean uncertainty and calibrated ECE vs severity per branch.')]
 
@@ -228,7 +231,15 @@ def main():
           P('Trained heads use Setting B (corruption-aware, mean over three leave-one-family-out rotations); '
             '"out-of-family" is accuracy on the held-out RGB and skeleton family, which the head never saw corrupted. '
             'Mixed stream: every test sample independently clean / RGB / skeleton / both corrupted (40/20/20/20%, '
-            'random family and severity). Highlighted: the proposed variants and the best mCA. Accuracies in %.')]
+            'random family and severity). Highlighted: the proposed variants and the best mCA. Accuracies in %; '
+            '&plusmn; = SD over 5 head seeds; untrained methods have no seed and no out-of-family column (-).'),
+          P('<b>Finding.</b> With corruption-aware training the learned reliability heads (all four variants) give the best mCA and mixed-stream '
+            'accuracy on both protocols, with almost no seed variance (SD 0.01-0.02): X-Sub 86.90 (validation-chosen variant) vs 86.76 for '
+            'entropy weighting and 85.54 for averaging; X-Set 88.25 vs 86.65 and 86.67. It keeps most of the gain on '
+            'corruption families it never saw (out-of-family 86.6 / 87.5). Trained only on clean data (Setting A) it does '
+            'not beat entropy weighting. Attention, modality dropout, feature-level fusion and TMC are below it; TMC is '
+            'also badly calibrated (ECE 0.6). The X-Sub margin over entropy weighting is small (0.14 points); paired '
+            'significance tests follow with the final temporal model.')]
     for p in ('xsub', 'xset'):
         s += [P(f'<b>{"X-Sub" if p == "xsub" else "X-Set"}</b>'), m4_main(p, t), Spacer(1, 6)]
     ab = (R4 / 'ablation.md').read_text().splitlines()
@@ -244,12 +255,11 @@ def main():
               'the proposed fusion.'),
           fig(R4 / 'fig_risk_coverage_xset.png', 15 * cm, 'Risk-coverage (X-Set) on clean data and on the mixed stream.')]
 
-    s += [P('6. Next steps', H1)]
-    s += bullets(['After Q1: extract segment-level features (4 or 8 segments), train temporal reliability with and without the '
+    s += [KeepTogether([P('6. Next steps', H1)] + bullets(['After Q1: extract segment-level features (4 or 8 segments), train temporal reliability with and without the '
                   'consistency loss (4.8-4.10), complete the "Full" ablation row and the temporal visualisations with '
                   'non-sentinel bursts (frozen frames, coupled occluder entering and leaving).',
                   'Per-class modality weights (4.17), error analysis of at least 30 failure cases (4.21), complexity table (4.22).',
-                  'Package final tables and figures for the paper; README with exact commands.'])
+                  'Package final tables and figures for the paper; README with exact commands.']))]
     s += [P('Appendix: deviations from the Milestone 4 guide', H2)]
     s += bullets(['4.6: a LayerNorm in front of the reliability MLP (without it the sigmoid saturated on the raw frozen features '
                   'and both weights stayed exactly 0.5).',
