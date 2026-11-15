@@ -187,6 +187,14 @@ def main():
                 lp, _ = infer(m, val, z, z, calib_rows)
                 conf = lp.exp().max(1).values.cpu().numpy()
                 taus = {c: float(np.quantile(conf, 1 - c)) for c in cfg['selective_targets']}
+                # variant choice (A3): mean top-1 on the calib half over the 30 single-modality validation conditions
+                accs = []
+                for mod, b in (('rgb', vr), ('skeleton', vs)):
+                    for i in range(1, len(b.index)):
+                        ci = torch.full((len(calib_rows),), i, device=dev)
+                        lpv, _ = infer(m, val, *((ci, z) if mod == 'rgb' else (z, ci)), calib_rows)
+                        accs.append(float((lpv.argmax(1) == val.y[calib_rows]).float().mean()))
+                calib_mca = float(np.mean(accs))
                 for rc, sc in conds + [('mixed', 'mixed')]:
                     if rc == 'mixed':
                         cr, cs = stream_r, stream_s
@@ -195,7 +203,7 @@ def main():
                     lp, w = infer(m, test, cr, cs, all_rows)
                     rows.append({'protocol': args.protocol, 'setting': setting, 'seed': seed, 'method': name,
                                  'held_out': '' if held is None else '+'.join(held),
-                                 'rgb_condition': rc, 'skeleton_condition': sc,
+                                 'rgb_condition': rc, 'skeleton_condition': sc, 'calib_val_mca': calib_mca,
                                  **metrics(lp, w, test.y, taus, cfg['coverages'])})
                 r = {x['rgb_condition'] + '|' + x['skeleton_condition']: x['accuracy'] for x in rows if x['method'] == name}
                 print(f'{setting} seed {seed} {name:>20}: clean {r["clean|clean"]:.4f}  mixed {r["mixed|mixed"]:.4f}  '
