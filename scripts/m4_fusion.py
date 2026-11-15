@@ -85,7 +85,7 @@ def train(name, data, rows, sampler, cfg, seed, dev):
     for ep in range(epochs):
         m.train()
         if hasattr(m, 'anneal'):
-            m.anneal = min(1.0, ep / 10)
+            m.anneal = min(1.0, ep / (0.1 * epochs))       # TMC: KL annealing (Han et al.: 50 of 500 epochs)
         cr, cs = sampler(len(rows), gen)
         perm = torch.from_numpy(gen.permutation(len(rows))).to(dev)
         for idx in perm.split(bs):
@@ -107,7 +107,8 @@ def metrics(lp, w, y, taus, coverages):
            'macro_f1': float(f1_score(y_, pred, average='macro', labels=list(range(K)), zero_division=0)),
            'ece': ece(p, y_), 'nll': nll(p, y_), 'brier': brier(p, y_), 'aurc': aurc,
            **{f'risk@{c}': v for c, v in at.items()},
-           'mean_w_rgb': float('nan') if w is None else float(w[:, 0].mean())}
+           'mean_w_rgb': float('nan') if w is None else float(w[:, 0].mean()),
+           'std_w_rgb': float('nan') if w is None else float(w[:, 0].std())}
     for c, tau in taus.items():
         keep = conf >= tau
         row[f'coverage_at_t{c}'] = float(keep.mean())

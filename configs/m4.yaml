@@ -4,8 +4,11 @@ features_dir: outputs/m3_robustness
 branch_runs: {rgb: 'r3d18_{protocol}_seed42', skeleton: 'ctrgcn_{protocol}_seed42'}
 # Validation is split once by performance (src/calibration.py val_half, review item A3): heads train on the
 # 'fit' half; temperatures and selective-prediction thresholds come from the clean 'calib' half.
-methods: [rgb, skeleton, average, maxconf, entropy, entropy_feat, attention, moddrop, tmc, reliability_tcp, reliability_correct]
-epochs: 40               # Setting A: passes over the fit half; Setting B: every epoch redraws each sample's condition
+methods: [rgb, skeleton, average, calibrated_average, maxconf, entropy, entropy_feat, attention, moddrop, tmc,
+          reliability_tcp, reliability_correct]
+# passes over the fit half (~3.2k samples, 13 batches): 300 epochs = ~3900 steps (40 epochs = 520 steps left the
+# reliability nets at their initial 0.5 / 0.5). Setting B redraws every sample's condition each epoch.
+epochs: 300
 batch_size: 256
 optimizer: {lr: 0.001, weight_decay: 0.01}
 # Setting B (4.12, review item B2): each training sample is drawn clean / RGB-corrupted / skeleton-corrupted

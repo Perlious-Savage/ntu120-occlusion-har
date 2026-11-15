@@ -3,7 +3,8 @@
 Every method maps (f_rgb, f_sk, lq_rgb, lq_sk) -> (log-probabilities, weights (B, 2) or None, extra loss), where
 f are the frozen branch features and lq the TEMPERATURE-SCALED branch log-probabilities (src/calibration.py).
 
-Not trained:  rgb, skeleton, average (raw softmax mean, the M3 comparator), maxconf (the more confident branch),
+Not trained:  rgb, skeleton, average (raw softmax mean, the M3 comparator), calibrated_average (0.5 / 0.5 on
+              lq: ablation variant B), maxconf (the more confident branch),
               entropy (4.5 logit level: w_m = R_m / (R_rgb + R_sk), R = 1 - normalised entropy).
 Trained:      entropy_feat (4.5 feature level: entropy weights mix projected features, then a classifier),
               attention (M3 head), moddrop (concat head trained with modality dropout), tmc (evidential
@@ -48,6 +49,9 @@ class Fixed(nn.Module):
         if self.kind == 'average':                         # raw (uncalibrated) softmax mean, as in Milestone 3
             pr, ps = raw
             return torch.log((pr + ps) / 2 + 1e-12), torch.full((b, 2), .5, device=lr.device), 0
+        if self.kind == 'calibrated_average':               # ablation B: calibration, fixed 0.5 / 0.5 on lq
+            w = torch.full((b, 2), .5, device=lr.device)
+            return mix(w, lr, ls), w, 0
         if self.kind == 'maxconf':
             pick = (lr.max(1).values >= ls.max(1).values).float()[:, None]
             w = torch.cat([pick, 1 - pick], 1)
@@ -109,7 +113,7 @@ class TMC(nn.Module):
         super().__init__()
         self.er = nn.Sequential(projection(512, d, dropout), nn.Linear(d, K), nn.Softplus())
         self.es = nn.Sequential(projection(256, d, dropout), nn.Linear(d, K), nn.Softplus())
-        self.anneal = 1.0                                  # set by the trainer: min(1, epoch / 10)
+        self.anneal = 1.0                                  # set by the trainer: KL weight ramps 0 -> 1 over 10% of training
 
     @staticmethod
     def combine(a1, a2):
@@ -165,7 +169,7 @@ class Reliability(nn.Module):
 
 
 def build(name):
-    if name in ('rgb', 'skeleton', 'average', 'maxconf', 'entropy'):
+    if name in ('rgb', 'skeleton', 'average', 'calibrated_average', 'maxconf', 'entropy'):
         return Fixed(name)
     return {'entropy_feat': EntropyFeat, 'attention': Attention, 'moddrop': ModDrop, 'tmc': TMC,
             'reliability_tcp': lambda: Reliability('tcp'), 'reliability_correct': lambda: Reliability('correct')}[name]()
@@ -178,7 +182,7 @@ if __name__ == '__main__':                                 # self-check: shapes,
     lr, ls = F.log_softmax(torch.randn(b, K), 1), F.log_softmax(torch.randn(b, K), 1)
     y = torch.randint(0, K, (b,))
     raw = (lr.exp(), ls.exp())
-    for n in ('rgb', 'skeleton', 'average', 'maxconf', 'entropy', 'entropy_feat', 'attention', 'moddrop', 'tmc',
+    for n in ('rgb', 'skeleton', 'average', 'calibrated_average', 'maxconf', 'entropy', 'entropy_feat', 'attention', 'moddrop', 'tmc',
               'reliability_tcp', 'reliability_correct'):
         m = build(n).train()
         lp, w, extra = m(fr, fs, lr, ls, y, raw)
